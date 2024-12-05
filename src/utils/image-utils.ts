@@ -8,17 +8,13 @@ const formatPriority = [
 async function convertImage(blob: Buffer, acceptHeader: string): Promise<Buffer> {
 	let selectedFormat: string | null = null;
 
-	const acceptTypes = acceptHeader.toLowerCase().split(",");
+	const acceptTypes = acceptHeader.toLowerCase().split(",") || "image/jpeg";
 
 	for (const format of formatPriority) {
 		if (acceptTypes.includes(format.mimeType)) {
 			selectedFormat = format.mimeType;
 			break;
 		}
-	}
-
-	if (!selectedFormat) {
-		selectedFormat = "image/jpeg";
 	}
 
 	const image = sharp(blob);
@@ -52,7 +48,7 @@ export async function handleImageRequest(blob: Blob, acceptHeader: string): Prom
 
 		const errorResponse: ApiResponse = {
 			code: "500",
-			message: "Error fetching avatar",
+			message: "Failed to process image",
 			status: "error",
 		};
 
