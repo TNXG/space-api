@@ -4,7 +4,7 @@ import { handleImageRequest } from "@/utils/image-utils";
 
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
-	const acceptHeader = getRequestHeader(event, "Accept");
+	const acceptHeader = getRequestHeader(event, "Accept") || getRequestHeader(event, "accept");
 
 	const type = query.type || query.t;
 
