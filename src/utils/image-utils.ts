@@ -50,10 +50,16 @@ export async function handleImageRequest(blob: Blob, acceptHeader: string): Prom
 	} catch (error) {
 		console.error("Error processing image:", error);
 
+		const errorResponse: ApiResponse = {
+			code: "500",
+			message: "Error fetching avatar",
+			status: "error",
+		};
+
 		return {
-			body: Buffer.from("Failed to process image"),
+			body: Buffer.from(JSON.stringify(errorResponse)),
 			headers: {
-				"Content-Type": "text/plain",
+				"Content-Type": "application/json",
 			},
 		};
 	}

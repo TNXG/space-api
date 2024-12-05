@@ -4,7 +4,7 @@ import { handleImageRequest } from "@/utils/image-utils";
 export default defineCachedEventHandler(
 	async (event: H3Event) => {
 		const query = getQuery(event);
-		const acceptHeader = getRequestHeader(event, "Accept");
+		const acceptHeader = getRequestHeader(event, "Accept") || getRequestHeader(event, "accept");
 
 		let avatarUrl: string;
 
