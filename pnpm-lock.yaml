@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@mx-space/api-client':
-        specifier: ^1.16.1
-        version: 1.16.1
       h3:
         specifier: ^1.13.0
         version: 1.13.0
@@ -454,9 +451,6 @@ packages:
   '@mapbox/node-pre-gyp@1.0.11':
     resolution: {integrity: sha512-Yhlar6v9WQgUp/He7BdgzOz8lqMQ8sU+jkCq7Wx8Myc5YFJLbEe7lgui/V7G1qB1DJykHSGwreceSaD60Y0PUQ==}
     hasBin: true
-
-  '@mx-space/api-client@1.16.1':
-    resolution: {integrity: sha512-IXZOYg63YmLvdAtE9dahub3MGKdWP0dJCs9/eYNwX6YimRTJ73UGurHvIa8ougTWlnitBL2gH15BcpWMpc5wfQ==}
 
   '@netlify/functions@2.8.2':
     resolution: {integrity: sha512-DeoAQh8LuNPvBE4qsKlezjKj0PyXDryOFJfJKo3Z1qZLKzQ21sT314KQKPVjfvw6knqijj+IO+0kHXy/TJiqNA==}
@@ -2493,8 +2487,6 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
-
-  '@mx-space/api-client@1.16.1': {}
 
   '@netlify/functions@2.8.2':
     dependencies:

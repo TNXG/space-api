@@ -1,44 +1,40 @@
 import sharp from "sharp";
 
-const formatPriority = [
-	{ mimeType: "image/avif", extension: "avif" },
-	{ mimeType: "image/webp", extension: "webp" },
-	{ mimeType: "image/jpeg", extension: "jpg" },
-];
-async function convertImage(blob: Buffer, acceptHeader: string): Promise<Buffer> {
-	let selectedFormat: string | null = null;
+const cachedImageConversion = defineCachedFunction(
+	async (buffer: Buffer, format: string, cacheKey: string) => {
+		const image = sharp(buffer);
 
-	const acceptTypes = acceptHeader.toLowerCase().split(",") || "image/jpeg";
-
-	for (const format of formatPriority) {
-		if (acceptTypes.includes(format.mimeType)) {
-			selectedFormat = format.mimeType;
-			break;
+		let convertedBuffer: Buffer<ArrayBufferLike> | PromiseLike<Buffer<ArrayBufferLike>>;
+		switch (format) {
+			case "image/avif":
+				convertedBuffer = await image.avif().toBuffer();
+				break;
+			case "image/webp":
+				convertedBuffer = await image.webp().toBuffer();
+				break;
+			default:
+				convertedBuffer = await image.jpeg().toBuffer();
 		}
-	}
 
-	const image = sharp(blob);
+		return convertedBuffer;
+	},
+	{
+		maxAge: 60 * 60,
+		name: "imageCache",
+		getKey: (buffer: Buffer, format: string, cacheKey: string) => `${format}-${cacheKey}`,
+	},
+);
 
-	switch (selectedFormat) {
-		case "image/avif":
-			return image.avif().toBuffer();
-		case "image/webp":
-			return image.webp().toBuffer();
-		default:
-			return image.jpeg().toBuffer();
-	}
-}
-
-export async function handleImageRequest(blob: Blob, acceptHeader: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
+export async function handleImageRequest(blob: Blob, acceptHeader: string, cacheKey: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
 	try {
 		const buffer = Buffer.from(await blob.arrayBuffer());
 
-		const convertedImage = await convertImage(buffer, acceptHeader);
+		const contentType = formatAccept(acceptHeader);
 
-		const contentType = acceptHeader.includes("avif") ? "image/avif" : acceptHeader.includes("webp") ? "image/webp" : "image/jpeg";
+		const convertedImage = await cachedImageConversion(buffer, contentType, cacheKey);
 
 		return {
-			body: convertedImage,
+			body: Buffer.from(convertedImage),
 			headers: {
 				"Content-Type": contentType,
 			},
@@ -60,3 +56,21 @@ export async function handleImageRequest(blob: Blob, acceptHeader: string): Prom
 		};
 	}
 }
+
+export const formatAccept = (acceptHeader: string) => {
+	const formatPriority = [
+		{ mimeType: "image/avif", extension: "avif" },
+		{ mimeType: "image/webp", extension: "webp" },
+		{ mimeType: "image/jpeg", extension: "jpg" },
+	];
+
+	const acceptTypes = acceptHeader.toLowerCase().split(",");
+
+	for (const format of formatPriority) {
+		if (acceptTypes.includes(format.mimeType)) {
+			return format.mimeType;
+		}
+	}
+
+	return "image/jpeg";
+};

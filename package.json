@@ -8,7 +8,6 @@
     "preview": "node .output/server/index.mjs"
   },
   "dependencies": {
-    "@mx-space/api-client": "^1.16.1",
     "h3": "^1.13.0",
     "sharp": "^0.33.5"
   },
