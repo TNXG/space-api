@@ -9,11 +9,12 @@
 		"ignoreUnknown": false,
 		"ignore": []
 	},
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "tab",
-    "lineWidth": 240
-  },
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 240,
+		"lineEnding": "lf"
+	},
 	"organizeImports": {
 		"enabled": true
 	},
@@ -25,7 +26,8 @@
 	},
 	"javascript": {
 		"formatter": {
-			"quoteStyle": "double"
+			"quoteStyle": "double",
+			"jsxQuoteStyle": "double"
 		}
 	}
 }
