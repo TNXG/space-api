@@ -8,8 +8,12 @@ export default eventHandler(async (event) => {
 
 	const type = query.type || query.t;
 
-	// 在1到136之间随机选择一个数字
-	const imageId = Math.floor(Math.random() * 200) + 1;
+	const blurhash = blurhashData.weight;
+
+	// 获取对应键值中的最大值
+	const maxNumber = Math.max(...Object.keys(blurhash).map((key) => Number.parseInt(key.match(/^(\d+)/)[1])));
+
+	const imageId = Math.floor(Math.random() * maxNumber) + 1;
 	const imageIdStr = imageId.toString();
 
 	// 根据 type 值决定执行不同的操作
@@ -28,7 +32,6 @@ export default eventHandler(async (event) => {
 				image: string;
 				blurhash: string;
 			}
-			const blurhash = blurhashData.weight;
 			const response: ApiResponse<ResponseData> = {
 				code: "200",
 				status: "success",

@@ -1,7 +1,7 @@
 import sharp from "sharp";
 
 const cachedImageConversion = defineCachedFunction(
-	async (buffer: Buffer, format: string, cacheKey: string) => {
+	async (buffer: Buffer, format: string) => {
 		const image = sharp(buffer);
 
 		let convertedBuffer: Buffer<ArrayBufferLike> | PromiseLike<Buffer<ArrayBufferLike>>;
@@ -21,17 +21,16 @@ const cachedImageConversion = defineCachedFunction(
 	{
 		maxAge: 60 * 60,
 		name: "imageCache",
-		getKey: (buffer: Buffer, format: string, cacheKey: string) => `${format}-${cacheKey}`,
 	},
 );
 
-export async function handleImageRequest(blob: Blob, acceptHeader: string, cacheKey: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
+export async function handleImageRequest(blob: Blob, acceptHeader: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
 	try {
 		const buffer = Buffer.from(await blob.arrayBuffer());
 
 		const contentType = formatAccept(acceptHeader);
 
-		const convertedImage = await cachedImageConversion(buffer, contentType, cacheKey);
+		const convertedImage = await cachedImageConversion(buffer, contentType);
 
 		return {
 			body: Buffer.from(convertedImage),
