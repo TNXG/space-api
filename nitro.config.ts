@@ -1,4 +1,4 @@
-//https://nitro.unjs.io/config
+// https://nitro.unjs.io/config
 import { fileURLToPath } from "node:url";
 
 export default defineNitroConfig({

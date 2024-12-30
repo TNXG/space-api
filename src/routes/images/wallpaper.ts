@@ -1,6 +1,6 @@
-import { eventHandler } from "h3";
 import blurhashData from "@/data/blurhash.json";
 import { handleImageRequest } from "@/utils/image-utils";
+import { eventHandler } from "h3";
 
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
@@ -11,7 +11,7 @@ export default eventHandler(async (event) => {
 	const blurhash = blurhashData.weight;
 
 	// 获取对应键值中的最大值
-	const maxNumber = Math.max(...Object.keys(blurhash).map((key) => Number.parseInt(key.match(/^(\d+)/)[1])));
+	const maxNumber = Math.max(...Object.keys(blurhash).map(key => Number.parseInt(key.match(/^(\d+)/)[1])));
 
 	const imageId = Math.floor(Math.random() * maxNumber) + 1;
 	const imageIdStr = imageId.toString();
@@ -56,7 +56,8 @@ export default eventHandler(async (event) => {
 				return new Response(body, {
 					headers,
 				});
-			} catch (error) {
+			}
+			catch (error) {
 				console.error("Error fetching avatar:", error);
 				const errorResponse: ApiResponse = {
 					code: "500",
