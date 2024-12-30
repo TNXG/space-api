@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import sharp from "sharp";
 
 const cachedImageConversion = defineCachedFunction(
@@ -24,38 +25,6 @@ const cachedImageConversion = defineCachedFunction(
 	},
 );
 
-export async function handleImageRequest(blob: Blob, acceptHeader: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
-	try {
-		const buffer = Buffer.from(await blob.arrayBuffer());
-
-		const contentType = formatAccept(acceptHeader);
-
-		const convertedImage = await cachedImageConversion(buffer, contentType);
-
-		return {
-			body: Buffer.from(convertedImage),
-			headers: {
-				"Content-Type": contentType,
-			},
-		};
-	} catch (error) {
-		console.error("Error processing image:", error);
-
-		const errorResponse: ApiResponse = {
-			code: "500",
-			message: "Failed to process image",
-			status: "error",
-		};
-
-		return {
-			body: Buffer.from(JSON.stringify(errorResponse)),
-			headers: {
-				"Content-Type": "application/json",
-			},
-		};
-	}
-}
-
 export const formatAccept = (acceptHeader: string) => {
 	const formatPriority = [
 		{ mimeType: "image/avif", extension: "avif" },
@@ -73,3 +42,36 @@ export const formatAccept = (acceptHeader: string) => {
 
 	return "image/jpeg";
 };
+
+export async function handleImageRequest(blob: Blob, acceptHeader: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
+	try {
+		const buffer = Buffer.from(await blob.arrayBuffer());
+
+		const contentType = formatAccept(acceptHeader);
+
+		const convertedImage = await cachedImageConversion(buffer, contentType);
+
+		return {
+			body: Buffer.from(convertedImage),
+			headers: {
+				"Content-Type": contentType,
+			},
+		};
+	}
+	catch (error) {
+		console.error("Error processing image:", error);
+
+		const errorResponse: ApiResponse = {
+			code: "500",
+			message: "Failed to process image",
+			status: "error",
+		};
+
+		return {
+			body: Buffer.from(JSON.stringify(errorResponse)),
+			headers: {
+				"Content-Type": "application/json",
+			},
+		};
+	}
+}
