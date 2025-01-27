@@ -5,6 +5,24 @@ declare global {
 		status: string;
 		data?: Data;
 	}
+	interface NeteaseMusicUserStatusDetailData {
+		code: number;
+		data: {
+			id: number;
+			userId: number;
+			avatar: string;
+			userName: string;
+			song: any;
+			content: {
+				type: string;
+				iconUrl: string;
+				content: string;
+				actionUrl: any;
+			};
+			extInfo: any;
+		};
+		message: string;
+	}
 }
 
 export { };

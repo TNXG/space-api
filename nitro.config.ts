@@ -10,6 +10,7 @@ const runtimeEnv = {
 	MONGO_PORT: process.env.MONGO_PORT,
 	MONGO_USER: process.env.MONGO_USER,
 	MONGO_PASSWORD: process.env.MONGO_PASSWORD,
+	CODETIME_SESSION: process.env.CODETIME_SESSION,
 };
 
 export default defineNitroConfig({
