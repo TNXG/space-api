@@ -76,6 +76,7 @@ export default eventHandler(async (event) => {
 		const response: ApiResponse = {
 			code: "200",
 			status: "success",
+			message: "Netease Music Now Playing Status",
 			data,
 		};
 
