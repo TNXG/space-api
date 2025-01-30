@@ -51,7 +51,7 @@ export default eventHandler(async (event) => {
 		const currentTime = new Date().toISOString();
 
 		// 检查缓存
-		const cachedData = await db_find("space_api", "ncm_status", { userId });
+		const cachedData = await db_find("space-api", "ncm_status", { userId });
 		let isInactive = false;
 
 		if (cachedData) {
@@ -62,50 +62,65 @@ export default eventHandler(async (event) => {
 			if (timeDiff > 5 * 60 * 1000 && cachedData.songId === songId) {
 				isInactive = true;
 			}
-
-			// 更新缓存
-			await db_update("space_api", "ncm_status", { userId }, { songId, timestamp: currentTime },
-			);
+			else {
+				await db_update("space-api", "ncm_status", { userId }, { songId, timestamp: currentTime });
+			}
 		}
 		else {
 			// 新用户，创建缓存
-			await db_insert("space_api", "ncm_status", {
+			await db_insert("space-api", "ncm_status", {
 				userId,
 				songId,
 				timestamp: currentTime,
 			});
 		}
 
-		const data = {
-			id: nowPlayingData.data.id,
-			user: {
-				id: nowPlayingData.data.userId,
-				avatar: nowPlayingData.data.avatar,
-				name: nowPlayingData.data.userName,
-				active: !isInactive,
-			},
-			song: {
-				name: nowPlayingData.data.song.name,
-				transNames: nowPlayingData.data.song.extProperties?.transNames || [],
-				alias: nowPlayingData.data.song.alias || [],
-				id: nowPlayingData.data.song.id,
-				artists: nowPlayingData.data.song.artists.map(artist => ({
-					id: artist.id,
-					name: artist.name,
-				})),
-				album: {
-					name: nowPlayingData.data.song.album.name,
-					id: nowPlayingData.data.song.album.id,
-					image: nowPlayingData.data.song.album.picUrl,
-					publishTime: new Date(nowPlayingData.data.song.album.publishTime).toISOString(),
-					artists: nowPlayingData.data.song.album.artists.map(artist => ({
+		let data;
+		if (isInactive) {
+			// 如果不活跃，只返回 id 和 user
+			data = {
+				id: nowPlayingData.data.id,
+				user: {
+					id: nowPlayingData.data.userId,
+					avatar: nowPlayingData.data.avatar,
+					name: nowPlayingData.data.userName,
+					active: !isInactive,
+				},
+			};
+		}
+		else {
+			// 如果活跃，返回完整数据
+			data = {
+				id: nowPlayingData.data.id,
+				user: {
+					id: nowPlayingData.data.userId,
+					avatar: nowPlayingData.data.avatar,
+					name: nowPlayingData.data.userName,
+					active: !isInactive,
+				},
+				song: {
+					name: nowPlayingData.data.song.name,
+					transNames: nowPlayingData.data.song.extProperties?.transNames || [],
+					alias: nowPlayingData.data.song.alias || [],
+					id: nowPlayingData.data.song.id,
+					artists: nowPlayingData.data.song.artists.map(artist => ({
 						id: artist.id,
 						name: artist.name,
 					})),
+					album: {
+						name: nowPlayingData.data.song.album.name,
+						id: nowPlayingData.data.song.album.id,
+						image: nowPlayingData.data.song.album.picUrl,
+						publishTime: new Date(nowPlayingData.data.song.album.publishTime).toISOString(),
+						artists: nowPlayingData.data.song.album.artists.map(artist => ({
+							id: artist.id,
+							name: artist.name,
+						})),
+					},
 				},
-			},
-			lastUpdate: currentTime,
-		};
+				lastUpdate: currentTime,
+			};
+		}
 
 		const response: ApiResponse = {
 			code: "200",
