@@ -62,7 +62,8 @@ export default eventHandler(async (event) => {
 			if (timeDiff > 5 * 60 * 1000 && cachedData.songId === songId) {
 				isInactive = true;
 			}
-			else {
+
+			if (cachedData.songId !== songId) {
 				await db_update("space-api", "ncm_status", { userId }, { songId, timestamp: currentTime });
 			}
 		}
