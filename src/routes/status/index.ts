@@ -150,7 +150,27 @@ export default eventHandler(async (event) => {
 			},
 		});
 
-		const response = generateResponse("success", "codetime", await data.json());
+		const jsonData = await data.json();
+
+		if (sse) {
+			// 如果是 SSE 请求，开启 SSE 连接
+			const stream = new ReadableStream({
+				start(controller) {
+					controller.enqueue(`data: ${JSON.stringify(jsonData)}\n\n`);
+					controller.close();
+				},
+			});
+
+			return new Response(stream, {
+				headers: {
+					"Content-Type": "text/event-stream; charset=utf-8",
+					"Cache-Control": "no-cache",
+					"Connection": "keep-alive",
+				},
+			});
+		}
+
+		const response = generateResponse("success", "codetime", jsonData);
 		return new Response(JSON.stringify(response), {
 			status: 200,
 			headers: {
