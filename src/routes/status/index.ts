@@ -121,7 +121,7 @@ export default eventHandler(async (event) => {
 			// 如果是 SSE 请求，开启 SSE 连接
 			const stream = new ReadableStream({
 				start(controller) {
-					controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+					controller.enqueue(JSON.stringify(data));
 					controller.close();
 				},
 			});
@@ -156,7 +156,7 @@ export default eventHandler(async (event) => {
 			// 如果是 SSE 请求，开启 SSE 连接
 			const stream = new ReadableStream({
 				start(controller) {
-					controller.enqueue(`data: ${JSON.stringify(jsonData)}\n\n`);
+					controller.enqueue(JSON.stringify(jsonData));
 					controller.close();
 				},
 			});
