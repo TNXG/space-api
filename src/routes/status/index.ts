@@ -46,7 +46,19 @@ export default eventHandler(async (event) => {
 	const query = getQuery(event);
 	const s = query.s || query.source || "codetime";
 	const q = query.q || query.query || 515522946;
-	const sse = query.sse === "true"; // 获取 sse 参数
+	const sse = query.sse === "true";
+	const interval = Number(query.interval) || Number(query.i) || 5000; // 默认5秒
+
+	// 验证 interval 参数
+	if (interval < 1000) {
+		const response = generateResponse("error", "Invalid interval: must be at least 1000ms", null, "400");
+		return new Response(JSON.stringify(response), {
+			status: 400,
+			headers: {
+				"Content-Type": "application/json",
+			},
+		});
+	}
 
 	// 校验 s 是否为字符串
 	if (typeof s !== "string") {
@@ -118,11 +130,55 @@ export default eventHandler(async (event) => {
 		}
 
 		if (sse) {
-			// 如果是 SSE 请求，开启 SSE 连接
 			const stream = new ReadableStream({
-				start(controller) {
-					controller.enqueue(JSON.stringify(data));
-					controller.close();
+				async start(controller) {
+					const sendData = async () => {
+						const nowPlayingData = await getNcmNowPlay(qNumber);
+						const userId = String(nowPlayingData.data.userId);
+						const songId = nowPlayingData.data.song.id;
+						const isInactive = await handleCache(userId, songId, new Date().toISOString());
+
+						// 更新数据
+						data.lastUpdate = new Date().toISOString();
+						data.user.active = !isInactive;
+						if (!isInactive) {
+							// 更新歌曲信息
+							data.song = {
+								name: nowPlayingData.data.song.name,
+								transNames: nowPlayingData.data.song.extProperties?.transNames || [],
+								alias: nowPlayingData.data.song.alias || [],
+								id: nowPlayingData.data.song.id,
+								artists: nowPlayingData.data.song.artists.map((artist: { id: any; name: any }) => ({
+									id: artist.id,
+									name: artist.name,
+								})),
+								album: {
+									name: nowPlayingData.data.song.album.name,
+									id: nowPlayingData.data.song.album.id,
+									image: nowPlayingData.data.song.album.picUrl,
+									publishTime: new Date(nowPlayingData.data.song.album.publishTime).toISOString(),
+									artists: nowPlayingData.data.song.album.artists.map(artist => ({
+										id: artist.id,
+										name: artist.name,
+									})),
+								},
+							};
+						}
+						else {
+							delete data.song;
+						}
+
+						controller.enqueue(JSON.stringify(data));
+					};
+
+					// 首次立即发送
+					await sendData();
+
+					// 设置定时发送
+					const intervalId = setInterval(sendData, interval);
+
+					// 清理函数
+					return () => clearInterval(intervalId);
 				},
 			});
 
@@ -153,11 +209,26 @@ export default eventHandler(async (event) => {
 		const jsonData = await data.json();
 
 		if (sse) {
-			// 如果是 SSE 请求，开启 SSE 连接
 			const stream = new ReadableStream({
-				start(controller) {
-					controller.enqueue(JSON.stringify(jsonData));
-					controller.close();
+				async start(controller) {
+					const sendData = async () => {
+						const data = await fetch("https://api.codetime.dev/stats/latest", {
+							headers: {
+								Cookie: `CODETIME_SESSION=${RuntimeConfig.CODETIME_SESSION}`,
+							},
+						});
+						const jsonData = await data.json();
+						controller.enqueue(JSON.stringify(jsonData));
+					};
+
+					// 首次立即发送
+					await sendData();
+
+					// 设置定时发送
+					const intervalId = setInterval(sendData, interval);
+
+					// 清理函数
+					return () => clearInterval(intervalId);
 				},
 			});
 
