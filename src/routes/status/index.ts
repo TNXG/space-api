@@ -168,16 +168,12 @@ export default eventHandler(async (event) => {
 							delete data.song;
 						}
 
-						controller.enqueue(JSON.stringify(data));
+						// 确保消息格式正确
+						controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
 					};
 
-					// 首次立即发送
 					await sendData();
-
-					// 设置定时发送
 					const intervalId = setInterval(sendData, interval);
-
-					// 清理函数
 					return () => clearInterval(intervalId);
 				},
 			});
@@ -218,16 +214,11 @@ export default eventHandler(async (event) => {
 							},
 						});
 						const jsonData = await data.json();
-						controller.enqueue(JSON.stringify(jsonData));
+						controller.enqueue(`data: ${JSON.stringify(jsonData)}\n\n`);
 					};
 
-					// 首次立即发送
 					await sendData();
-
-					// 设置定时发送
 					const intervalId = setInterval(sendData, interval);
-
-					// 清理函数
 					return () => clearInterval(intervalId);
 				},
 			});
