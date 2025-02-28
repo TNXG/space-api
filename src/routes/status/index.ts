@@ -3,20 +3,54 @@ import { getNcmNowPlay } from "@/utils/ncm-nowplay";
 
 const RuntimeConfig = useRuntimeConfig();
 
+interface User {
+	id: string;
+	avatar: string;
+	name: string;
+	active: boolean;
+}
+
+interface Song {
+	name: string;
+	transNames: string[];
+	alias: string[];
+	id: string;
+	artists: { id: string; name: string }[];
+	album: {
+		name: string;
+		id: string;
+		image: string;
+		publishTime: string;
+		artists: { id: string; name: string }[];
+	};
+}
+
+interface NowPlayingData {
+	id: number;
+	user: User;
+	song?: Song;
+	lastUpdate: string;
+}
+
+// 封装生成响应的函数
+const generateResponse = <T>(status: string, message: string, data: T | null, code: string = "200"): ApiResponse<T> => {
+	return {
+		code,
+		status,
+		message,
+		data,
+	};
+};
+
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
-
 	const s = query.s || query.source || "codetime";
 	const q = query.q || query.query || 515522946;
+	const sse = query.sse === "true"; // 获取 sse 参数
 
 	// 校验 s 是否为字符串
 	if (typeof s !== "string") {
-		const response: ApiResponse = {
-			code: "400",
-			status: "error",
-			message: "Invalid s parameter: must be a string",
-		};
-
+		const response = generateResponse("error", "Invalid s parameter: must be a string", null, "400");
 		return new Response(JSON.stringify(response), {
 			status: 400,
 			headers: {
@@ -27,109 +61,81 @@ export default eventHandler(async (event) => {
 
 	// 校验 q 是否为数字
 	if (Number.isNaN(Number(q))) {
-		const response: ApiResponse = {
-			code: "400",
-			status: "error",
-			message: "Invalid q parameter: must be a number",
-		};
-
+		const response = generateResponse("error", "Invalid q parameter: must be a number", null, "400");
 		return new Response(JSON.stringify(response), {
 			status: 400,
 			headers: {
-				"Content-Type": "application/json",
+				"Content-Type": "application/json; charset=utf-8",
 			},
 		});
 	}
 
 	const qNumber = Number(q); // 将 q 转换为数字
 	const sString = String(s); // 将 s 转换为字符串
+	const currentTime = new Date().toISOString();
 
 	if (sString === "ncm" || sString === "n" || sString === "netease") {
 		const nowPlayingData = await getNcmNowPlay(qNumber);
-		const userId = nowPlayingData.data.userId;
+		const userId = String(nowPlayingData.data.userId); // 强制将 userId 转换为字符串
 		const songId = nowPlayingData.data.song.id;
-		const currentTime = new Date().toISOString();
 
-		// 检查缓存
-		const cachedData = await db_find("space-api", "ncm_status", { userId });
-		let isInactive = false;
+		// 处理缓存
+		const isInactive = await handleCache(userId, songId, currentTime);
 
-		if (cachedData) {
-			const lastUpdate = new Date(cachedData.timestamp);
-			const timeDiff = new Date().getTime() - lastUpdate.getTime();
+		const data: NowPlayingData = {
+			id: nowPlayingData.data.id,
+			user: {
+				id: userId, // 确保 userId 为字符串
+				avatar: nowPlayingData.data.avatar,
+				name: nowPlayingData.data.userName,
+				active: !isInactive,
+			},
+			lastUpdate: currentTime,
+		};
 
-			// 如果超过5分钟还是同一首歌，标记为不活跃
-			if (timeDiff > 5 * 60 * 1000 && cachedData.songId === songId) {
-				isInactive = true;
-			}
-
-			if (cachedData.songId !== songId) {
-				await db_update("space-api", "ncm_status", { userId }, { songId, timestamp: currentTime });
-			}
-		}
-		else {
-			// 新用户，创建缓存
-			await db_insert("space-api", "ncm_status", {
-				userId,
-				songId,
-				timestamp: currentTime,
-			});
-		}
-
-		let data;
-		if (isInactive) {
-			// 如果不活跃，只返回 id 和 user
-			data = {
-				id: nowPlayingData.data.id,
-				user: {
-					id: nowPlayingData.data.userId,
-					avatar: nowPlayingData.data.avatar,
-					name: nowPlayingData.data.userName,
-					active: !isInactive,
-				},
-			};
-		}
-		else {
-			// 如果活跃，返回完整数据
-			data = {
-				id: nowPlayingData.data.id,
-				user: {
-					id: nowPlayingData.data.userId,
-					avatar: nowPlayingData.data.avatar,
-					name: nowPlayingData.data.userName,
-					active: !isInactive,
-				},
-				song: {
-					name: nowPlayingData.data.song.name,
-					transNames: nowPlayingData.data.song.extProperties?.transNames || [],
-					alias: nowPlayingData.data.song.alias || [],
-					id: nowPlayingData.data.song.id,
-					artists: nowPlayingData.data.song.artists.map(artist => ({
+		// 只有当不是不活跃时才添加 song
+		if (!isInactive) {
+			data.song = {
+				name: nowPlayingData.data.song.name,
+				transNames: nowPlayingData.data.song.extProperties?.transNames || [],
+				alias: nowPlayingData.data.song.alias || [],
+				id: nowPlayingData.data.song.id,
+				artists: nowPlayingData.data.song.artists.map((artist: { id: any; name: any }) => ({
+					id: artist.id,
+					name: artist.name,
+				})),
+				album: {
+					name: nowPlayingData.data.song.album.name,
+					id: nowPlayingData.data.song.album.id,
+					image: nowPlayingData.data.song.album.picUrl,
+					publishTime: new Date(nowPlayingData.data.song.album.publishTime).toISOString(),
+					artists: nowPlayingData.data.song.album.artists.map(artist => ({
 						id: artist.id,
 						name: artist.name,
 					})),
-					album: {
-						name: nowPlayingData.data.song.album.name,
-						id: nowPlayingData.data.song.album.id,
-						image: nowPlayingData.data.song.album.picUrl,
-						publishTime: new Date(nowPlayingData.data.song.album.publishTime).toISOString(),
-						artists: nowPlayingData.data.song.album.artists.map(artist => ({
-							id: artist.id,
-							name: artist.name,
-						})),
-					},
 				},
-				lastUpdate: currentTime,
 			};
 		}
 
-		const response: ApiResponse = {
-			code: "200",
-			status: "success",
-			message: "Netease Music Now Playing Status",
-			data,
-		};
+		if (sse) {
+			// 如果是 SSE 请求，开启 SSE 连接
+			const stream = new ReadableStream({
+				start(controller) {
+					controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+					controller.close();
+				},
+			});
 
+			return new Response(stream, {
+				headers: {
+					"Content-Type": "text/event-stream; charset=utf-8",
+					"Cache-Control": "no-cache",
+					"Connection": "keep-alive",
+				},
+			});
+		}
+
+		const response = generateResponse("success", "Netease Music Now Playing Status", data);
 		return new Response(JSON.stringify(response), {
 			status: 200,
 			headers: {
@@ -144,13 +150,7 @@ export default eventHandler(async (event) => {
 			},
 		});
 
-		const response: ApiResponse = {
-			code: "200",
-			status: "success",
-			message: "codetime",
-			data: await data.json(),
-		};
-
+		const response = generateResponse("success", "codetime", await data.json());
 		return new Response(JSON.stringify(response), {
 			status: 200,
 			headers: {
@@ -159,3 +159,32 @@ export default eventHandler(async (event) => {
 		});
 	}
 });
+
+// 优化缓存机制
+const handleCache = async (userId: string, songId: string, currentTime: string) => {
+	const cachedData = await db_find("space-api", "ncm_status", { userId });
+	let isInactive = false;
+
+	if (cachedData) {
+		const lastUpdate = new Date(cachedData.timestamp);
+		const timeDiff = new Date().getTime() - lastUpdate.getTime();
+
+		if (timeDiff > 5 * 60 * 1000 && cachedData.songId === songId) {
+			isInactive = true;
+		}
+
+		if (cachedData.songId !== songId) {
+			await db_update("space-api", "ncm_status", { userId }, { songId, timestamp: currentTime });
+		}
+	}
+	else {
+		// 新用户，创建缓存
+		await db_insert("space-api", "ncm_status", {
+			userId,
+			songId,
+			timestamp: currentTime,
+		});
+	}
+
+	return isInactive;
+};

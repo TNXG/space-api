@@ -10,6 +10,7 @@ export default antfu({
 	rules: {
 		// 忽略 antfu/top-level-function 规则
 		"antfu/top-level-function": "off",
+		"@typescript-eslint/no-use-before-define": "off",
 	},
 	env: {
 		browser: true,
