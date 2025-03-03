@@ -1,9 +1,10 @@
 export default defineEventHandler(async (event) => {
 	const url = getRequestURL(event);
+	const baseUrl = `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ""}`;
 	const encoder = new TextEncoder();
 	let isConnectionActive = true;
 	let lastData = null;
-	let lastFallbackData = null; // 添加 fallback 数据的缓存
+	let lastFallbackData = null;
 
 	const stream = new ReadableStream({
 		async start(controller) {
@@ -17,8 +18,7 @@ export default defineEventHandler(async (event) => {
 					});
 					const returndata = await response.json();
 
-					// 获取 fallback 数据
-					const fallbackResponse = await fetch(`${url}/status/?s=n`);
+					const fallbackResponse = await fetch(`${baseUrl}/status/?s=n`);
 					const fallbackData = await fallbackResponse.json();
 
 					if (!returndata.mediaInfo && fallbackData.data?.user?.active === true) {
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
 							AlbumThumbnail: fallbackData.data.song.album.image,
 						};
 					}
-					// 比较主数据和 fallback 数据是否都没有变化
+
 					const isDataChanged = !lastData || JSON.stringify(lastData) !== JSON.stringify(returndata);
 					const isFallbackChanged = !lastFallbackData || JSON.stringify(lastFallbackData) !== JSON.stringify(fallbackData);
 
@@ -45,8 +45,7 @@ export default defineEventHandler(async (event) => {
 						lastFallbackData = fallbackData;
 					}
 				}
-				catch (error) {
-					console.error("Fetch error:", error);
+				catch {
 					if (isConnectionActive) {
 						controller.enqueue(
 							encoder.encode(`data: ${JSON.stringify({ error: "Failed to fetch data" })}\n\n`),
@@ -64,7 +63,6 @@ export default defineEventHandler(async (event) => {
 			await fetchAndSendData();
 
 			const dataInterval = setInterval(fetchAndSendData, 5000);
-
 			const heartbeatInterval = setInterval(sendHeartbeat, 30000);
 
 			return () => {
