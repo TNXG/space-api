@@ -1,14 +1,37 @@
 import type { H3Event } from "h3";
-import { handleImageRequest } from "@/utils/image-utils";
+import { Buffer } from "node:buffer";
+import { formatAccept, handleImageRequest } from "@/utils/image-utils";
+
+interface CachedImageData {
+	body: {
+		type: "Buffer";
+		data: number[];
+	};
+	headers: {
+		"Content-Type": string;
+	};
+}
 
 export default eventHandler(async (event: H3Event) => {
 	const query = getQuery(event);
 	const acceptHeader = getRequestHeader(event, "Accept") || getRequestHeader(event, "accept");
-
-	let avatarUrl: string;
-
 	const source = query.s || query.source;
 
+	// 生成缓存键
+	const cacheKey = `avatar:${source}:${formatAccept(acceptHeader)}`;
+
+	// 尝试从缓存获取
+	const cached = await useStorage().getItem<CachedImageData>(cacheKey);
+	if (cached) {
+		return new Response(Buffer.from(cached.body.data), {
+			headers: {
+				...cached.headers,
+				"Cache-Status": "HIT",
+			},
+		});
+	}
+
+	let avatarUrl: string;
 	if (source === "qq" || source === "QQ") {
 		avatarUrl = "https://q1.qlogo.cn/g?b=qq&nk=2271225249&s=640";
 	}
@@ -21,13 +44,18 @@ export default eventHandler(async (event: H3Event) => {
 
 	try {
 		const response = await fetch(avatarUrl);
-
 		const blob = await response.blob();
+		const result = await handleImageRequest(blob, acceptHeader);
 
-		const { body, headers } = await handleImageRequest(blob, acceptHeader);
+		await useStorage().setItem(cacheKey, result, {
+			ttl: 60 * 60 * 6,
+		});
 
-		return new Response(body, {
-			headers,
+		return new Response(result.body, {
+			headers: {
+				...result.headers,
+				"Cache-Status": "MISS",
+			},
 		});
 	}
 	catch (error) {

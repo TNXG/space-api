@@ -3,6 +3,7 @@ export default defineEventHandler(async (event) => {
 
 	const encoder = new TextEncoder();
 	let isConnectionActive = true;
+	let lastData = null;
 
 	const stream = new ReadableStream({
 		async start(controller) {
@@ -11,13 +12,11 @@ export default defineEventHandler(async (event) => {
 					return;
 
 				try {
-					// 获取主状态数据
 					const response = await fetch("https://mx.tnxg.top/api/v2/fn/ps/update", {
 						method: "POST",
 					});
 					const returndata = await response.json();
 
-					// 如果没有 mediaInfo，尝试从 space_status 获取
 					if (!returndata.mediaInfo) {
 						const fallbackResponse = await fetch(`${url}/status/?s=n`);
 						const fallbackData = await fallbackResponse.json();
@@ -38,8 +37,9 @@ export default defineEventHandler(async (event) => {
 						}
 					}
 
-					if (isConnectionActive) {
+					if (isConnectionActive && (!lastData || JSON.stringify(lastData) !== JSON.stringify(returndata))) {
 						controller.enqueue(encoder.encode(`data: ${JSON.stringify(returndata)}\n\n`));
+						lastData = returndata;
 					}
 				}
 				catch (error) {
@@ -52,17 +52,23 @@ export default defineEventHandler(async (event) => {
 				}
 			};
 
-			// 立即执行一次
+			const sendHeartbeat = () => {
+				if (isConnectionActive) {
+					controller.enqueue(encoder.encode(": heartbeat\n\n"));
+				}
+			};
+
 			await fetchAndSendData();
 
-			// 每 5 秒执行一次
-			const interval = setInterval(fetchAndSendData, 5000);
+			const dataInterval = setInterval(fetchAndSendData, 5000);
 
-			// 清理函数
+			const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+
 			return () => {
 				isConnectionActive = false;
-				clearInterval(interval);
-				controller.close(); // Ensure the controller is closed
+				clearInterval(dataInterval);
+				clearInterval(heartbeatInterval);
+				controller.close();
 			};
 		},
 		cancel() {
