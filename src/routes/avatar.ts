@@ -26,7 +26,7 @@ export default eventHandler(async (event: H3Event) => {
 		return new Response(Buffer.from(cached.body.data), {
 			headers: {
 				...cached.headers,
-				"Cache-Status": "HIT",
+				"Api-Cache": "HIT",
 			},
 		});
 	}
@@ -54,7 +54,7 @@ export default eventHandler(async (event: H3Event) => {
 		return new Response(result.body, {
 			headers: {
 				...result.headers,
-				"Cache-Status": "MISS",
+				"Api-Cache": "MISS",
 			},
 		});
 	}
