@@ -1,29 +1,23 @@
 import { Buffer } from "node:buffer";
 import sharp from "sharp";
 
-const cachedImageConversion = defineCachedFunction(
-	async (buffer: Buffer, format: string) => {
-		const image = sharp(buffer);
+async function convertImage(buffer: Buffer, format: string) {
+	const image = sharp(buffer);
 
-		let convertedBuffer: Buffer<ArrayBufferLike> | PromiseLike<Buffer<ArrayBufferLike>>;
-		switch (format) {
-			case "image/avif":
-				convertedBuffer = await image.avif().toBuffer();
-				break;
-			case "image/webp":
-				convertedBuffer = await image.webp().toBuffer();
-				break;
-			default:
-				convertedBuffer = await image.jpeg().toBuffer();
-		}
+	let convertedBuffer: Buffer | PromiseLike<Buffer>;
+	switch (format) {
+		case "image/avif":
+			convertedBuffer = await image.avif().toBuffer();
+			break;
+		case "image/webp":
+			convertedBuffer = await image.webp().toBuffer();
+			break;
+		default:
+			convertedBuffer = await image.jpeg().toBuffer();
+	}
 
-		return convertedBuffer;
-	},
-	{
-		maxAge: 60 * 60,
-		name: "imageCache",
-	},
-);
+	return convertedBuffer;
+}
 
 export const formatAccept = (acceptHeader: string) => {
 	const formatPriority = [
@@ -46,10 +40,8 @@ export const formatAccept = (acceptHeader: string) => {
 export async function handleImageRequest(blob: Blob, acceptHeader: string): Promise<{ body: Buffer; headers: { [key: string]: string } }> {
 	try {
 		const buffer = Buffer.from(await blob.arrayBuffer());
-
 		const contentType = formatAccept(acceptHeader);
-
-		const convertedImage = await cachedImageConversion(buffer, contentType);
+		const convertedImage = await convertImage(buffer, contentType);
 
 		return {
 			body: Buffer.from(convertedImage),

@@ -32,7 +32,6 @@ interface NowPlayingData {
 	lastUpdate: string;
 }
 
-// 封装生成响应的函数
 const generateResponse = <T>(status: string, message: string, data: T | null, code: string = "200"): ApiResponse<T> => {
 	return {
 		code,
@@ -47,9 +46,8 @@ export default eventHandler(async (event) => {
 	const s = query.s || query.source || "codetime";
 	const q = query.q || query.query || 515522946;
 	const sse = query.sse === "true";
-	const interval = Number(query.interval) || Number(query.i) || 5000; // 默认5秒
+	const interval = Number(query.interval) || Number(query.i) || 5000;
 
-	// 验证 interval 参数
 	if (interval < 1000) {
 		const response = generateResponse("error", "Invalid interval: must be at least 1000ms", null, "400");
 		return new Response(JSON.stringify(response), {
@@ -60,7 +58,6 @@ export default eventHandler(async (event) => {
 		});
 	}
 
-	// 校验 s 是否为字符串
 	if (typeof s !== "string") {
 		const response = generateResponse("error", "Invalid s parameter: must be a string", null, "400");
 		return new Response(JSON.stringify(response), {
@@ -71,7 +68,6 @@ export default eventHandler(async (event) => {
 		});
 	}
 
-	// 校验 q 是否为数字
 	if (Number.isNaN(Number(q))) {
 		const response = generateResponse("error", "Invalid q parameter: must be a number", null, "400");
 		return new Response(JSON.stringify(response), {
@@ -82,22 +78,21 @@ export default eventHandler(async (event) => {
 		});
 	}
 
-	const qNumber = Number(q); // 将 q 转换为数字
-	const sString = String(s); // 将 s 转换为字符串
+	const qNumber = Number(q);
+	const sString = String(s);
 	const currentTime = new Date().toISOString();
 
 	if (sString === "ncm" || sString === "n" || sString === "netease") {
 		const nowPlayingData = await getNcmNowPlay(qNumber);
-		const userId = String(nowPlayingData.data.userId); // 强制将 userId 转换为字符串
+		const userId = String(nowPlayingData.data.userId);
 		const songId = nowPlayingData.data.song.id;
 
-		// 处理缓存
 		const isInactive = await handleCache(userId, songId, currentTime);
 
 		const data: NowPlayingData = {
 			id: nowPlayingData.data.id,
 			user: {
-				id: userId, // 确保 userId 为字符串
+				id: userId,
 				avatar: nowPlayingData.data.avatar,
 				name: nowPlayingData.data.userName,
 				active: !isInactive,
@@ -105,7 +100,6 @@ export default eventHandler(async (event) => {
 			lastUpdate: currentTime,
 		};
 
-		// 只有当不是不活跃时才添加 song
 		if (!isInactive) {
 			data.song = {
 				name: nowPlayingData.data.song.name,
@@ -132,17 +126,18 @@ export default eventHandler(async (event) => {
 		if (sse) {
 			const stream = new ReadableStream({
 				async start(controller) {
+					let lastData = null;
+					const encoder = new TextEncoder();
+
 					const sendData = async () => {
 						const nowPlayingData = await getNcmNowPlay(qNumber);
 						const userId = String(nowPlayingData.data.userId);
 						const songId = nowPlayingData.data.song.id;
 						const isInactive = await handleCache(userId, songId, new Date().toISOString());
 
-						// 更新数据
 						data.lastUpdate = new Date().toISOString();
 						data.user.active = !isInactive;
 						if (!isInactive) {
-							// 更新歌曲信息
 							data.song = {
 								name: nowPlayingData.data.song.name,
 								transNames: nowPlayingData.data.song.extProperties?.transNames || [],
@@ -168,13 +163,25 @@ export default eventHandler(async (event) => {
 							delete data.song;
 						}
 
-						// 确保消息格式正确
-						controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+						const currentData = JSON.stringify(data);
+						if (!lastData || lastData !== currentData) {
+							controller.enqueue(encoder.encode(`data: ${currentData}\n\n`));
+							lastData = currentData;
+						}
+					};
+
+					const sendHeartbeat = () => {
+						controller.enqueue(encoder.encode(": heartbeat\n\n"));
 					};
 
 					await sendData();
-					const intervalId = setInterval(sendData, interval);
-					return () => clearInterval(intervalId);
+					const dataInterval = setInterval(sendData, interval);
+					const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+
+					return () => {
+						clearInterval(dataInterval);
+						clearInterval(heartbeatInterval);
+					};
 				},
 			});
 
@@ -207,6 +214,9 @@ export default eventHandler(async (event) => {
 		if (sse) {
 			const stream = new ReadableStream({
 				async start(controller) {
+					let lastData = null;
+					const encoder = new TextEncoder();
+
 					const sendData = async () => {
 						const data = await fetch("https://api.codetime.dev/stats/latest", {
 							headers: {
@@ -214,12 +224,25 @@ export default eventHandler(async (event) => {
 							},
 						});
 						const jsonData = await data.json();
-						controller.enqueue(`data: ${JSON.stringify(jsonData)}\n\n`);
+						const currentData = JSON.stringify(jsonData);
+						if (!lastData || lastData !== currentData) {
+							controller.enqueue(encoder.encode(`data: ${currentData}\n\n`));
+							lastData = currentData;
+						}
+					};
+
+					const sendHeartbeat = () => {
+						controller.enqueue(encoder.encode(": heartbeat\n\n"));
 					};
 
 					await sendData();
-					const intervalId = setInterval(sendData, interval);
-					return () => clearInterval(intervalId);
+					const dataInterval = setInterval(sendData, interval);
+					const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+
+					return () => {
+						clearInterval(dataInterval);
+						clearInterval(heartbeatInterval);
+					};
 				},
 			});
 
@@ -242,7 +265,6 @@ export default eventHandler(async (event) => {
 	}
 });
 
-// 优化缓存机制
 const handleCache = async (userId: string, songId: string, currentTime: string) => {
 	const cachedData = await db_find("space-api", "ncm_status", { userId });
 	let isInactive = false;
@@ -260,7 +282,6 @@ const handleCache = async (userId: string, songId: string, currentTime: string) 
 		}
 	}
 	else {
-		// 新用户，创建缓存
 		await db_insert("space-api", "ncm_status", {
 			userId,
 			songId,
