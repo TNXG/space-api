@@ -54,20 +54,19 @@ export default defineEventHandler(async (event) => {
 				}
 			};
 
-			const sendHeartbeat = () => {
+			const sendHeartbeatAndCheckData = async () => {
 				if (isConnectionActive) {
 					controller.enqueue(encoder.encode(": heartbeat\n\n"));
+					await fetchAndSendData();
 				}
 			};
 
 			await fetchAndSendData();
 
-			const dataInterval = setInterval(fetchAndSendData, 5000);
-			const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+			const heartbeatInterval = setInterval(sendHeartbeatAndCheckData, 30000);
 
 			return () => {
 				isConnectionActive = false;
-				clearInterval(dataInterval);
 				clearInterval(heartbeatInterval);
 				controller.close();
 			};
