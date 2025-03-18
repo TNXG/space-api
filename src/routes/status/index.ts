@@ -1,7 +1,10 @@
+import process from "node:process";
 import { db_find, db_insert, db_update } from "@/utils/db";
-import { getNcmNowPlay } from "@/utils/ncm-nowplay";
 
-const RuntimeConfig = useRuntimeConfig();
+import { getNcmNowPlay } from "@/utils/ncm-nowplay";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 interface User {
 	id: string;
@@ -205,7 +208,7 @@ export default eventHandler(async (event) => {
 	else {
 		const data = await fetch("https://api.codetime.dev/stats/latest", {
 			headers: {
-				Cookie: `CODETIME_SESSION=${RuntimeConfig.CODETIME_SESSION}`,
+				Cookie: `CODETIME_SESSION=${process.env.CODETIME_SESSION}`,
 			},
 		});
 
@@ -220,7 +223,7 @@ export default eventHandler(async (event) => {
 					const sendData = async () => {
 						const data = await fetch("https://api.codetime.dev/stats/latest", {
 							headers: {
-								Cookie: `CODETIME_SESSION=${RuntimeConfig.CODETIME_SESSION}`,
+								Cookie: `CODETIME_SESSION=${process.env.CODETIME_SESSION}`,
 							},
 						});
 						const jsonData = await data.json();

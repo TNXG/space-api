@@ -1,16 +1,28 @@
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 
-const RuntimeConfig = useRuntimeConfig();
+dotenv.config();
+
+const runtimeEnv = {
+	JWT_SECRET: process.env.JWT_SECRET,
+	MONGO_HOST: process.env.MONGO_HOST,
+	MONGO_PORT: process.env.MONGO_PORT,
+	MONGO_USER: process.env.MONGO_USER,
+	MONGO_PASSWORD: process.env.MONGO_PASSWORD,
+	CODETIME_SESSION: process.env.CODETIME_SESSION,
+};
 
 /**
  * 创建并返回一个 MongoDB 客户端实例。
  * @returns {MongoClient} MongoDB 客户端实例
  */
 function mongoClient(): MongoClient {
-	const MONGO_HOST = RuntimeConfig.MONGO_HOST || "127.0.0.1";
-	let MONGO_PORT: string = (RuntimeConfig.MONGO_PORT || 27017).toString();
-	const MONGO_USER = RuntimeConfig.MONGO_USER;
-	const MONGO_PASSWORD = RuntimeConfig.MONGO_PASSWORD;
+	const MONGO_HOST = runtimeEnv.MONGO_HOST || "127.0.0.1";
+	let MONGO_PORT: string = (runtimeEnv.MONGO_PORT || 27017).toString();
+	const MONGO_USER = runtimeEnv.MONGO_USER;
+	const MONGO_PASSWORD = runtimeEnv.MONGO_PASSWORD;
 
 	MONGO_PORT = Number.isNaN(Number.parseInt(MONGO_PORT)) ? "27017" : Number.parseInt(MONGO_PORT).toString();
 
