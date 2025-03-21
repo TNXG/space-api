@@ -161,8 +161,7 @@ export default eventHandler(async (event) => {
 									})),
 								},
 							};
-						}
-						else {
+						} else {
 							delete data.song;
 						}
 
@@ -204,8 +203,7 @@ export default eventHandler(async (event) => {
 				"Content-Type": "application/json",
 			},
 		});
-	}
-	else {
+	} else {
 		const data = await fetch("https://api.codetime.dev/stats/latest", {
 			headers: {
 				Cookie: `CODETIME_SESSION=${process.env.CODETIME_SESSION}`,
@@ -268,7 +266,7 @@ export default eventHandler(async (event) => {
 	}
 });
 
-const handleCache = async (userId: string, songId: string, currentTime: string) => {
+async function handleCache(userId: string, songId: string, currentTime: string): Promise<boolean> {
 	const cachedData = await db_find("space-api", "ncm_status", { userId });
 	let isInactive = false;
 
@@ -283,8 +281,7 @@ const handleCache = async (userId: string, songId: string, currentTime: string) 
 		if (cachedData.songId !== songId) {
 			await db_update("space-api", "ncm_status", { userId }, { songId, timestamp: currentTime });
 		}
-	}
-	else {
+	} else {
 		await db_insert("space-api", "ncm_status", {
 			userId,
 			songId,

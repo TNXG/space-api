@@ -10,10 +10,8 @@ export default antfu({
 	rules: {
 		// 忽略 antfu/top-level-function 规则
 		"antfu/top-level-function": "off",
-		"@typescript-eslint/no-use-before-define": "off",
-	},
-	env: {
-		browser: true,
-		es2024: true,
+		// no-console 允许info和warn、error
+		"no-console": ["error", { allow: ["info", "warn", "error"] }],
+		"brace-style": ["error", "1tbs", { allowSingleLine: true }],
 	},
 });

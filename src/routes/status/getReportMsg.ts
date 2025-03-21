@@ -44,8 +44,7 @@ export default defineEventHandler(async (event) => {
 						lastData = returndata;
 						lastFallbackData = fallbackData;
 					}
-				}
-				catch {
+				} catch {
 					if (isConnectionActive) {
 						controller.enqueue(
 							encoder.encode(`data: ${JSON.stringify({ error: "Failed to fetch data" })}\n\n`),

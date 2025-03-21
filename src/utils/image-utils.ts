@@ -49,8 +49,7 @@ export async function handleImageRequest(blob: Blob, acceptHeader: string): Prom
 				"Content-Type": contentType,
 			},
 		};
-	}
-	catch (error) {
+	} catch (error) {
 		console.error("Error processing image:", error);
 
 		const errorResponse: ApiResponse = {

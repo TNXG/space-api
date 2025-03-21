@@ -1,4 +1,5 @@
-import { eventHandler, type H3Event } from "h3";
+import type { H3Event } from "h3";
+import { eventHandler } from "h3";
 
 interface ResponseData {
 	version: number;

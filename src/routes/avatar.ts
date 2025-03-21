@@ -34,11 +34,9 @@ export default eventHandler(async (event: H3Event) => {
 	let avatarUrl: string;
 	if (source === "qq" || source === "QQ") {
 		avatarUrl = "https://q1.qlogo.cn/g?b=qq&nk=2271225249&s=640";
-	}
-	else if (source === "github" || source === "GitHub" || source === "gh" || source === "GH") {
+	} else if (source === "github" || source === "GitHub" || source === "gh" || source === "GH") {
 		avatarUrl = "https://avatars.githubusercontent.com/u/69001561";
-	}
-	else {
+	} else {
 		avatarUrl = "https://cdn.tnxg.top/images/avatar/main/Texas.png";
 	}
 
@@ -57,8 +55,7 @@ export default eventHandler(async (event: H3Event) => {
 				"Api-Cache": "MISS",
 			},
 		});
-	}
-	catch (error) {
+	} catch (error) {
 		console.error("Error fetching avatar:", error);
 
 		const errorResponse: ApiResponse = {

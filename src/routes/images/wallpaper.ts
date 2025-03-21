@@ -56,8 +56,7 @@ export default eventHandler(async (event) => {
 				return new Response(body, {
 					headers,
 				});
-			}
-			catch (error) {
+			} catch (error) {
 				console.error("Error fetching avatar:", error);
 				const errorResponse: ApiResponse = {
 					code: "500",

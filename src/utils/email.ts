@@ -44,8 +44,7 @@ export async function sendVerificationCode(to: string, code: string): Promise<bo
 			`,
 		});
 		return true;
-	}
-	catch (error) {
+	} catch (error) {
 		console.error("发送验证码邮件失败:", error);
 		return false;
 	}
