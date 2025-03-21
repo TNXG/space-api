@@ -33,8 +33,7 @@ export async function createVerificationCode(email: string): Promise<string | nu
 
 		const success = await db_insert("space-api", "verification_codes", verificationCode);
 		return success ? code : null;
-	}
-	catch (error) {
+	} catch (error) {
 		console.error("创建验证码失败:", error);
 		return null;
 	}
@@ -63,8 +62,7 @@ export async function verifyCode(email: string, code: string): Promise<boolean> 
 		// 标记验证码为已使用
 		await db_delete("space-api", "verification_codes", { email });
 		return true;
-	}
-	catch (error) {
+	} catch (error) {
 		console.error("验证码验证失败:", error);
 		return false;
 	}

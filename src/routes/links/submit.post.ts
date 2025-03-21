@@ -99,8 +99,7 @@ export default eventHandler(async (event) => {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
-	}
-	catch (error) {
+	} catch (error) {
 		const response: ApiResponse = {
 			code: "500",
 			status: "error",

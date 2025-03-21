@@ -1,5 +1,4 @@
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 
@@ -59,12 +58,10 @@ export async function check_db(dbName: string): Promise<boolean> {
 		await connectWithTimeout(client);
 		const dblist = await client.db().admin().listDatabases();
 		return dblist.databases.some(db => db.name === dbName);
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`检查数据库时出错: ${(error as Error).message}`);
 		return false;
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -84,12 +81,10 @@ export async function db_read(dbName: string, collectionName: string, filter: ob
 		const db = client.db(dbName);
 		const collection = db.collection(collectionName);
 		return await collection.find(filter, options).toArray();
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`读取数据时出错: ${(error as Error).message}`);
 		return [];
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -109,12 +104,10 @@ export async function db_insert(dbName: string, collectionName: string, data: ob
 		const collection = db.collection(collectionName);
 		await collection.insertOne(data);
 		return true;
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`插入数据时出错: ${(error as Error).message}`);
 		return false;
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -133,12 +126,10 @@ export async function db_find(dbName: string, collectionName: string, data: obje
 		const db = client.db(dbName);
 		const collection = db.collection(collectionName);
 		return await collection.findOne(data);
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`查找数据时出错: ${(error as Error).message}`);
 		return null;
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -159,12 +150,10 @@ export async function db_update(dbName: string, collectionName: string, query: o
 		const collection = db.collection(collectionName);
 		await collection.updateOne(query, { $set: data });
 		return true;
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`更新数据时出错: ${(error as Error).message}`);
 		return false;
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -184,12 +173,10 @@ export async function db_delete(dbName: string, collectionName: string, query: o
 		const collection = db.collection(collectionName);
 		await collection.deleteOne(query);
 		return true;
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`删除数据时出错: ${(error as Error).message}`);
 		return false;
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -208,12 +195,10 @@ export async function db_count(dbName: string, collectionName: string, filter: o
 		const db = client.db(dbName);
 		const collection = db.collection(collectionName);
 		return await collection.countDocuments(filter);
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`获取文档总数时出错: ${(error as Error).message}`);
 		return 0;
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }
@@ -237,12 +222,10 @@ export async function db_getUniqueFieldValues(dbName: string, collectionName: st
 			{ $project: { _id: 0, value: "$_id" } },
 		]).toArray();
 		return result.map(item => item.value);
-	}
-	catch (error) {
+	} catch (error) {
 		console.error(`获取唯一字段值时出错: ${(error as Error).message}`);
 		return [];
-	}
-	finally {
+	} finally {
 		await client.close();
 	}
 }

@@ -51,28 +51,32 @@ pnpm preview
 #### `POST /links/verify` - 发送友链验证码
 
 **请求参数：**
+
 ```typescript
 {
-  email: string  // 接收验证码的邮箱地址
+	email: string; // 接收验证码的邮箱地址
 }
 ```
 
 **响应数据：**
+
 ```typescript
 {
-  code: string;       // 状态码
-  status: string;     // 状态：success 或 error
-  message: string;    // 响应消息
+	code: string; // 状态码
+	status: string; // 状态：success 或 error
+	message: string; // 响应消息
 }
 ```
 
 **错误类型：**
+
 - `400` - 邮箱地址未提供
 - `500` - 验证码生成失败或发送失败
 
 #### `POST /links/submit` - 提交友链
 
 **请求参数：**
+
 ```typescript
 {
   name: string;        // 网站名称
@@ -87,6 +91,7 @@ pnpm preview
 ```
 
 **响应数据：**
+
 ```typescript
 {
   code: string;       // 状态码
@@ -106,6 +111,7 @@ pnpm preview
 ```
 
 **错误类型：**
+
 - `400` - 缺少必填字段
 - `401` - 验证码无效
 - `409` - URL已存在
@@ -114,38 +120,41 @@ pnpm preview
 #### `GET /links` - 获取友链列表
 
 **查询参数：**
+
 - `page` - 页码（默认：1）
 - `size` - 每页数量（默认：50）
 
 **响应数据：**
+
 ```typescript
 {
-  code: string;       // 状态码
-  status: string;     // 状态：success 或 error
-  data: Array<{      // 友链列表
-    name: string;
-    url: string;
-    avatar: string;
-    description: string;
-    state: number;
-    created: string;
-    rssurl: string;
-    techstack: string[];
-  }>;
-  message: {         // 分页信息
-    pagination: {
-      total: number;        // 总记录数
-      current_page: number; // 当前页码
-      total_page: number;   // 总页数
-      size: number;         // 每页数量
-      has_next_page: boolean;
-      has_prev_page: boolean;
-    }
-  }
+	code: string; // 状态码
+	status: string; // 状态：success 或 error
+	data: Array<{ // 友链列表
+		name: string;
+		url: string;
+		avatar: string;
+		description: string;
+		state: number;
+		created: string;
+		rssurl: string;
+		techstack: string[];
+	}>;
+	message: { // 分页信息
+		pagination: {
+			total: number; // 总记录数
+			current_page: number; // 当前页码
+			total_page: number; // 总页数
+			size: number; // 每页数量
+			has_next_page: boolean;
+			has_prev_page: boolean;
+		}
+	}
 }
 ```
 
 **错误类型：**
+
 - `400` - 无效的页码或大小参数
 
 ### 图片服务
@@ -153,46 +162,52 @@ pnpm preview
 #### `GET /avatar` - 获取头像
 
 **查询参数：**
+
 - `s` 或 `source` - 头像来源（可选值：qq/QQ、github/GitHub/gh/GH，默认使用自定义头像）
 
 **响应：**
+
 - 成功：返回图片数据，支持WebP等现代图片格式
 - 失败：返回JSON格式错误信息
   ```typescript
   {
-    code: string;    // 状态码
-    message: string; // 错误信息
-    status: string;  // error
+  	code: string; // 状态码
+  	message: string; // 错误信息
+  	status: string; // error
   }
   ```
 
 **错误类型：**
+
 - `500` - 获取头像失败
 
 #### `GET /images/wallpaper` - 获取壁纸
 
 **查询参数：**
+
 - `type` 或 `t` - 返回类型
   - `cdn` - 返回CDN直链（302重定向）
   - `json` - 返回JSON格式的图片信息
   - 默认返回图片数据
 
 **响应：**
+
 - `type=cdn`：302重定向到CDN地址
 - `type=json`：
   ```typescript
   {
-    code: string;       // 状态码
-    status: string;     // success
-    data: {
-      image: string;    // 图片URL
-      blurhash: string; // BlurHash编码
-    }
+  	code: string; // 状态码
+  	status: string; // success
+  	data: {
+  		image: string; // 图片URL
+  		blurhash: string; // BlurHash编码
+  	}
   }
   ```
 - 默认：返回图片数据
 
 **错误类型：**
+
 - `500` - 获取图片失败
 
 ### 状态监控
@@ -200,12 +215,14 @@ pnpm preview
 #### `GET /status` - 获取博主状态信息
 
 **查询参数：**
+
 - `s` 或 `source` - 数据来源（默认：codetime）
 - `q` 或 `query` - 查询ID（默认：515522946）
 - `sse` - 是否启用服务器发送事件（默认：false）
 - `interval` 或 `i` - SSE更新间隔，单位毫秒（默认：5000）
 
 **响应数据：**
+
 ```typescript
 {
   code: string;      // 状态码
@@ -245,12 +262,15 @@ pnpm preview
 ```
 
 **错误类型：**
+
 - `400` - 无效的参数（interval < 1000ms、无效的source或query）
 
 ### 其他
 
 #### `GET /` - API根路径
+
 返回API基本信息
 
 #### `GET /sw.js` - Service Worker脚本
+
 返回Service Worker脚本文件
