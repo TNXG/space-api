@@ -8,7 +8,7 @@ export default eventHandler(async (event) => {
 		if (!body.email) {
 			const response: ApiResponse = {
 				code: "400",
-				status: "error",
+				status: "failed",
 				message: "Email is required",
 			};
 			return new Response(JSON.stringify(response), {
@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
 		if (!code) {
 			const response: ApiResponse = {
 				code: "500",
-				status: "error",
+				status: "failed",
 				message: "Failed to generate verification code",
 			};
 			return new Response(JSON.stringify(response), {
@@ -36,7 +36,7 @@ export default eventHandler(async (event) => {
 		if (!sent) {
 			const response: ApiResponse = {
 				code: "500",
-				status: "error",
+				status: "failed",
 				message: "Failed to send verification code",
 			};
 			return new Response(JSON.stringify(response), {
@@ -58,7 +58,7 @@ export default eventHandler(async (event) => {
 	} catch (error) {
 		const response: ApiResponse = {
 			code: "500",
-			status: "error",
+			status: "failed",
 			message: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}`,
 		};
 		return new Response(JSON.stringify(response), {

@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
 		if (!body.name || !body.url || !body.avatar || !body.description || !body.email || !body.code) {
 			const response: ApiResponse = {
 				code: "400",
-				status: "error",
+				status: "failed",
 				message: "Missing required fields",
 			};
 			return new Response(JSON.stringify(response), {
@@ -36,7 +36,7 @@ export default eventHandler(async (event) => {
 		if (!isCodeValid) {
 			const response: ApiResponse = {
 				code: "401",
-				status: "error",
+				status: "failed",
 				message: "Invalid verification code",
 			};
 			return new Response(JSON.stringify(response), {
@@ -50,7 +50,7 @@ export default eventHandler(async (event) => {
 		if (existingLink) {
 			const response: ApiResponse = {
 				code: "409",
-				status: "error",
+				status: "failed",
 				message: "URL already exists",
 			};
 			return new Response(JSON.stringify(response), {
@@ -77,7 +77,7 @@ export default eventHandler(async (event) => {
 		if (!success) {
 			const response: ApiResponse = {
 				code: "500",
-				status: "error",
+				status: "failed",
 				message: "Failed to insert link",
 			};
 			return new Response(JSON.stringify(response), {
@@ -102,7 +102,7 @@ export default eventHandler(async (event) => {
 	} catch (error) {
 		const response: ApiResponse = {
 			code: "500",
-			status: "error",
+			status: "failed",
 			message: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}`,
 		};
 		return new Response(JSON.stringify(response), {
