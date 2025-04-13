@@ -9,7 +9,7 @@ export default eventHandler(async (event) => {
 	if (Number.isNaN(page) || page <= 0) {
 		const response: ApiResponse = {
 			code: "400",
-			status: "error",
+			status: "failed",
 			message: "Invalid page parameter",
 		};
 
@@ -24,7 +24,7 @@ export default eventHandler(async (event) => {
 	if (Number.isNaN(size) || size <= 0) {
 		const response: ApiResponse = {
 			code: "400",
-			status: "error",
+			status: "failed",
 			message: "Invalid size parameter",
 		};
 

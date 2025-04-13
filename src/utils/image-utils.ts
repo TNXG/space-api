@@ -55,7 +55,7 @@ export async function handleImageRequest(blob: Blob, acceptHeader: string): Prom
 		const errorResponse: ApiResponse = {
 			code: "500",
 			message: "Failed to process image",
-			status: "error",
+			status: "failed",
 		};
 
 		return {

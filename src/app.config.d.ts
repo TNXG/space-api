@@ -2,7 +2,7 @@ declare global {
 	export interface ApiResponse<Data = any> {
 		code: string;
 		message?: string | object;
-		status: string;
+		status: "success" | "failed";
 		data?: Data;
 	}
 	interface NeteaseMusicUserStatusDetailData {

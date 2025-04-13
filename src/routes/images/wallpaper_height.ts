@@ -61,7 +61,7 @@ export default eventHandler(async (event) => {
 				const errorResponse: ApiResponse = {
 					code: "500",
 					message: "Error fetching avatar",
-					status: "error",
+					status: "failed",
 				};
 				return new Response(JSON.stringify(errorResponse), {
 					status: 500,
