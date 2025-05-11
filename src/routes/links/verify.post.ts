@@ -1,3 +1,4 @@
+import { db_find } from "@/utils/db";
 import { sendVerificationCode } from "@/utils/email";
 import { createVerificationCode } from "@/utils/verification";
 
@@ -20,6 +21,26 @@ export default eventHandler(async (event) => {
 		// 生成验证码
 		const code = await createVerificationCode(body.email);
 		if (!code) {
+			// 检查是否是因为频率限制
+			const existingCode = await db_find("space-api", "verification_codes", { email: body.email });
+			if (existingCode) {
+				const createdAt = new Date(existingCode.createdAt);
+				const now = new Date();
+				const diffSeconds = Math.floor((now.getTime() - createdAt.getTime()) / 1000);
+
+				if (diffSeconds < 60) {
+					const response: ApiResponse = {
+						code: "429",
+						status: "failed",
+						message: `请求过于频繁，请在${60 - diffSeconds}秒后重试`,
+					};
+					return new Response(JSON.stringify(response), {
+						status: 429,
+						headers: { "Content-Type": "application/json" },
+					});
+				}
+			}
+
 			const response: ApiResponse = {
 				code: "500",
 				status: "failed",
