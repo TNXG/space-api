@@ -45,8 +45,25 @@ export default eventHandler(async (event) => {
 			});
 		}
 
+		// 规范化URL
+		const normalizedUrl = body.url.replace(/\/$/, ""); // 移除末尾的斜杠
+
+		// 检查是否包含子目录
+		const urlParts = new URL(normalizedUrl).pathname.split("/");
+		if (urlParts.length > 1 && urlParts[1] !== "") {
+			const response: ApiResponse = {
+				code: "400",
+				status: "failed",
+				message: "URL不能包含子目录",
+			};
+			return new Response(JSON.stringify(response), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
+
 		// 检查URL是否已存在
-		const existingLink = await db_find("space-api", "links", { url: body.url });
+		const existingLink = await db_find("space-api", "links", { url: normalizedUrl });
 		if (existingLink) {
 			const response: ApiResponse = {
 				code: "409",
@@ -62,7 +79,7 @@ export default eventHandler(async (event) => {
 		// 准备要插入的数据
 		const linkData = {
 			name: body.name,
-			url: body.url,
+			url: normalizedUrl,
 			avatar: body.avatar,
 			description: body.description,
 			state: body.state || 0,
