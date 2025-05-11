@@ -106,6 +106,7 @@ pnpm preview
     created: string;
     rssurl: string;
     techstack: string[];
+    blogger: string;  // 博主名字
   }
 }
 ```
