@@ -6,7 +6,6 @@ interface LinkSubmission {
 	url: string;
 	avatar: string;
 	description: string;
-	state: number;
 	created: string;
 	rssurl: string;
 	techstack: string[];
@@ -82,25 +81,45 @@ export default eventHandler(async (event) => {
 			url: normalizedUrl,
 			avatar: body.avatar,
 			description: body.description,
-			state: body.state || 0,
+			state: 1,
 			created: body.created || new Date().toISOString(),
 			rssurl: body.rssurl || "",
 			techstack: body.techstack || [],
 			email: body.email,
 		};
 
-		// 插入数据
-		const success = await db_insert("space-api", "links", linkData);
-		if (!success) {
+		// 插入数据到space-api数据库
+		const successSpaceApi = await db_insert("space-api", "links", linkData);
+		if (!successSpaceApi) {
 			const response: ApiResponse = {
 				code: "500",
 				status: "failed",
-				message: "Failed to insert link",
+				message: "Failed to insert link to space-api database",
 			};
 			return new Response(JSON.stringify(response), {
 				status: 500,
 				headers: { "Content-Type": "application/json" },
 			});
+		}
+
+		// 准备mx-space数据库的数据格式
+		const mxSpaceData = {
+			name: body.name,
+			url: normalizedUrl,
+			avatar: body.avatar,
+			description: body.description,
+			type: 0,
+			state: 1,
+			created: {
+				$date: new Date().toISOString(),
+			},
+		};
+
+		// 插入数据到mx-space数据库
+		const successMxSpace = await db_insert("mx-space", "links", mxSpaceData);
+		if (!successMxSpace) {
+			console.error("Failed to insert link to mx-space database");
+			// 继续执行，不影响主流程
 		}
 
 		// 从返回数据中移除email字段
