@@ -16,6 +16,19 @@ function generateCode(): string {
 // 创建新的验证码
 export async function createVerificationCode(email: string): Promise<string | null> {
 	try {
+		// 检查是否在60秒内已经发送过验证码
+		const existingCode = await db_find("space-api", "verification_codes", { email });
+		if (existingCode) {
+			const createdAt = new Date(existingCode.createdAt);
+			const now = new Date();
+			const diffSeconds = Math.floor((now.getTime() - createdAt.getTime()) / 1000);
+
+			if (diffSeconds < 60) {
+				console.info(`验证码发送过于频繁，请在${60 - diffSeconds}秒后重试`);
+				return null;
+			}
+		}
+
 		// 删除该邮箱的旧验证码
 		await db_delete("space-api", "verification_codes", { email });
 
