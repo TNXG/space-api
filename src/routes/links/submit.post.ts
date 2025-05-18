@@ -108,11 +108,10 @@ export default eventHandler(async (event) => {
 			url: normalizedUrl,
 			avatar: body.avatar,
 			description: body.description,
+			email: body.email,
 			type: 0,
 			state: 1,
-			created: {
-				$date: new Date().toISOString(),
-			},
+			created: new Date(),
 		};
 
 		// 插入数据到mx-space数据库
