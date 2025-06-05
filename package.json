@@ -1,6 +1,6 @@
 {
 	"private": true,
-	"packageManager": "pnpm@10.10.0",
+	"packageManager": "pnpm@10.11.1",
 	"scripts": {
 		"build": "nitro build",
 		"dev": "nitro dev",
@@ -9,16 +9,16 @@
 	},
 	"dependencies": {
 		"dotenv": "16.5.0",
-		"h3": "^1.15.1",
-		"mongodb": "6.16.0",
+		"h3": "^1.15.3",
+		"mongodb": "6.17.0",
 		"nodemailer": "7.0.3",
-		"sharp": "0.34.1"
+		"sharp": "0.34.2"
 	},
 	"devDependencies": {
-		"@antfu/eslint-config": "4.13.0",
+		"@antfu/eslint-config": "4.13.3",
 		"@types/nodemailer": "6.4.17",
-		"eslint": "9.26.0",
-		"eslint-plugin-format": "^1.0.1",
-		"nitropack": "2.11.11"
+		"eslint": "9.28.0",
+		"eslint-plugin-format": "1.0.1",
+		"nitropack": "2.11.12"
 	}
 }
