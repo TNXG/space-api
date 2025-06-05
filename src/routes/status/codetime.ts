@@ -85,7 +85,6 @@ export default eventHandler(async (event) => {
 
 		if (jsonData.error != null) {
 			const response = generateResponse("failed", "codetime", null, "500");
-			console.error(jsonData);
 			return new Response(JSON.stringify(response), {
 				status: 500,
 				headers: { "Content-Type": "application/json" },
