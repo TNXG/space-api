@@ -65,7 +65,7 @@ export default eventHandler(async (event) => {
 		}
 
 		// 发送验证码邮件
-		const sent = await sendVerificationCode(body.email, code);
+		const sent = await sendVerificationCode(body.email, code, body.method);
 		if (!sent) {
 			const response: ApiResponse = {
 				code: "500",
