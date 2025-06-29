@@ -2,6 +2,7 @@ import { db_delete, db_find, db_insert } from "./db";
 
 interface VerificationCode {
 	email: string;
+	method: "links" | "login";
 	code: string;
 	createdAt: string;
 	expiredAt: string;
@@ -14,10 +15,10 @@ function generateCode(): string {
 }
 
 // 创建新的验证码
-export async function createVerificationCode(email: string): Promise<string | null> {
+export async function createVerificationCode(email: string, method: "links" | "login"): Promise<string | null> {
 	try {
 		// 检查是否在60秒内已经发送过验证码
-		const existingCode = await db_find("space-api", "verification_codes", { email });
+		const existingCode = await db_find("space-api", "verification_codes", { email, method });
 		if (existingCode) {
 			const createdAt = new Date(existingCode.createdAt);
 			const now = new Date();
@@ -29,8 +30,8 @@ export async function createVerificationCode(email: string): Promise<string | nu
 			}
 		}
 
-		// 删除该邮箱的旧验证码
-		await db_delete("space-api", "verification_codes", { email });
+		// 删除该邮箱+method的旧验证码
+		await db_delete("space-api", "verification_codes", { email, method });
 
 		const code = generateCode();
 		const now = new Date();
@@ -38,6 +39,7 @@ export async function createVerificationCode(email: string): Promise<string | nu
 
 		const verificationCode: VerificationCode = {
 			email,
+			method,
 			code,
 			createdAt: now.toISOString(),
 			expiredAt: expiredAt.toISOString(),
