@@ -66,7 +66,7 @@ export default eventHandler(async (event) => {
 
 	const nowPlayingData = await getNcmNowPlay(qNumber);
 
-	if (nowPlayingData.data == null) {
+	if (nowPlayingData.data) {
 		const response = generateResponse("failed", "User not found", null, "404");
 		return new Response(JSON.stringify(response), {
 			status: 404,
