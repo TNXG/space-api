@@ -1,6 +1,5 @@
 import blurhashData from "@/data/blurhash.json";
 import { handleImageRequest } from "@/utils/image-utils";
-import { eventHandler } from "h3";
 
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
@@ -44,6 +43,7 @@ export default eventHandler(async (event) => {
 				status: 200,
 				headers: {
 					"Content-Type": "application/json",
+					"Cache-Control": "public, max-age=30",
 				},
 			});
 		}

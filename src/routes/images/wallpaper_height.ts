@@ -1,6 +1,5 @@
 import blurhashData from "@/data/blurhash.json";
 import { handleImageRequest } from "@/utils/image-utils";
-import { eventHandler } from "h3";
 
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
@@ -16,10 +15,8 @@ export default eventHandler(async (event) => {
 	const imageId = Math.floor(Math.random() * maxNumber) + 1;
 	const imageIdStr = imageId.toString();
 
-	// 根据 type 值决定执行不同的操作
 	switch (type) {
 		case "cdn":
-			// 创建一个带有 Location 头部的重定向响应
 			return new Response(null, {
 				status: 302,
 				headers: {
@@ -44,6 +41,7 @@ export default eventHandler(async (event) => {
 				status: 200,
 				headers: {
 					"Content-Type": "application/json",
+					"Cache-Control": "public, max-age=30",
 				},
 			});
 		}
