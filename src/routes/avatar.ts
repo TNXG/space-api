@@ -27,6 +27,7 @@ export default eventHandler(async (event: H3Event) => {
 			headers: {
 				...cached.headers,
 				"Api-Cache": "HIT",
+				"Cache-Control": "public, max-age=259200, s-maxage=172800",
 			},
 		});
 	}
@@ -53,6 +54,7 @@ export default eventHandler(async (event: H3Event) => {
 			headers: {
 				...result.headers,
 				"Api-Cache": "MISS",
+				"Cache-Control": "public, max-age=259200, s-maxage=172800",
 			},
 		});
 	} catch (error) {
