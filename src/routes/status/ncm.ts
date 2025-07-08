@@ -1,35 +1,32 @@
 import { db_find, db_insert, db_update } from "@/utils/db";
-import { getNcmNowPlay } from "@/utils/ncm-nowplay";
+import { getNcmNowPlay } from "~/utils/ncm-nowplay";
 
 interface User {
-	id: string;
+	id: number;
 	avatar: string;
 	name: string;
 	active: boolean;
 }
-
 interface Song {
 	name: string;
 	transNames: string[];
 	alias: string[];
-	id: string;
-	artists: { id: string; name: string }[];
+	id: number;
+	artists: { id: number; name: string }[];
 	album: {
 		name: string;
-		id: string;
+		id: number;
 		image: string;
 		publishTime: string;
-		artists: { id: string; name: string }[];
+		artists: { id: number; name: string }[];
 	};
 }
-
 interface NowPlayingData {
 	id: number;
 	user: User;
 	song?: Song;
 	lastUpdate: string;
 }
-
 const generateResponse = <T>(status: "success" | "failed", message: string, data: T | null, code: string = "200"): ApiResponse<T> => {
 	return {
 		code,
@@ -44,41 +41,56 @@ export default eventHandler(async (event) => {
 	const q = query.q || query.query || 515522946;
 	const sse = query.sse === "true";
 	const interval = Number(query.interval) || Number(query.i) || 5000;
-
 	if (interval < 1000) {
-		const response = generateResponse("failed", "Invalid interval: must be at least 1000ms", null, "400");
-		return new Response(JSON.stringify(response), {
-			status: 400,
-			headers: { "Content-Type": "application/json" },
-		});
+		return new Response(
+			JSON.stringify(
+				generateResponse(
+					"failed",
+					"Invalid interval: must be at least 1000ms",
+					null,
+					"400",
+				),
+			),
+			{
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			},
+		);
 	}
-
 	if (Number.isNaN(Number(q))) {
-		const response = generateResponse("failed", "Invalid q parameter: must be a number", null, "400");
-		return new Response(JSON.stringify(response), {
-			status: 400,
-			headers: { "Content-Type": "application/json; charset=utf-8" },
-		});
+		return new Response(
+			JSON.stringify(
+				generateResponse(
+					"failed",
+					"Invalid q parameter: must be a number",
+					null,
+					"400",
+				),
+			),
+			{
+				status: 400,
+				headers: { "Content-Type": "application/json; charset=utf-8" },
+			},
+		);
 	}
-
 	const qNumber = Number(q);
 	const currentTime = new Date().toISOString();
-
 	const nowPlayingData = await getNcmNowPlay(qNumber);
-
-	if (nowPlayingData.data) {
-		const response = generateResponse("failed", "User not found", null, "404");
-		return new Response(JSON.stringify(response), {
-			status: 404,
-			headers: { "Content-Type": "application/json; charset=utf-8" },
-		});
+	// 检查 data 是否为 null
+	if (!nowPlayingData.data) {
+		return new Response(
+			JSON.stringify(
+				generateResponse("failed", "User not found", null, "404"),
+			),
+			{
+				status: 404,
+				headers: { "Content-Type": "application/json; charset=utf-8" },
+			},
+		);
 	}
-
-	const userId = String(nowPlayingData.data.userId);
+	const userId = nowPlayingData.data.userId;
 	const songId = nowPlayingData.data.song.id;
-
 	const isInactive = await handleCache(userId, songId, currentTime);
-
 	const data: NowPlayingData = {
 		id: nowPlayingData.data.id,
 		user: {
@@ -89,23 +101,24 @@ export default eventHandler(async (event) => {
 		},
 		lastUpdate: currentTime,
 	};
-
 	if (!isInactive) {
+		const song = nowPlayingData.data.song;
 		data.song = {
-			name: nowPlayingData.data.song.name,
-			transNames: nowPlayingData.data.song.extProperties?.transNames || [],
-			alias: nowPlayingData.data.song.alias || [],
-			id: nowPlayingData.data.song.id,
-			artists: nowPlayingData.data.song.artists.map((artist: { id: any; name: any }) => ({
+			name: song.name,
+			// 优先使用 song.transNames，如果不存在则尝试从 extProperties 获取
+			transNames: song.transNames || song.extProperties?.transNames || [],
+			alias: song.alias || [],
+			id: song.id,
+			artists: song.artists.map(artist => ({
 				id: artist.id,
 				name: artist.name,
 			})),
 			album: {
-				name: nowPlayingData.data.song.album.name,
-				id: nowPlayingData.data.song.album.id,
-				image: nowPlayingData.data.song.album.picUrl,
-				publishTime: new Date(nowPlayingData.data.song.album.publishTime).toISOString(),
-				artists: nowPlayingData.data.song.album.artists.map(artist => ({
+				name: song.album.name,
+				id: song.album.id,
+				image: song.album.picUrl,
+				publishTime: new Date(song.album.publishTime).toISOString(),
+				artists: song.album.artists.map(artist => ({
 					id: artist.id,
 					name: artist.name,
 				})),
@@ -116,13 +129,13 @@ export default eventHandler(async (event) => {
 	if (sse) {
 		const stream = new ReadableStream({
 			async start(controller) {
-				let lastSongId: string | null = null;
+				let lastSongId: number | null = null;
 				let lastActive: boolean | null = null;
 				const encoder = new TextEncoder();
 
 				const sendData = async () => {
 					const currentNcmData = await getNcmNowPlay(qNumber);
-					const currentUserId = String(currentNcmData.data.userId);
+					const currentUserId = currentNcmData.data.userId;
 					const currentSongId = currentNcmData.data.song.id;
 					const currentIsInactive = await handleCache(currentUserId, currentSongId, new Date().toISOString());
 
@@ -201,7 +214,7 @@ export default eventHandler(async (event) => {
 	}
 });
 
-async function handleCache(userId: string, songId: string, currentTime: string): Promise<boolean> {
+async function handleCache(userId: number, songId: number, currentTime: string): Promise<boolean> {
 	const cachedData = await db_find("space-api", "ncm_status", { userId });
 	let isInactive = false;
 
