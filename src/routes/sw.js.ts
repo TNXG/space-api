@@ -16,7 +16,8 @@ export default defineEventHandler(
 				headers: { "Content-Type": "application/javascript; charset=utf-8" },
 			});
 		} catch (error) {
-			return new Response(`// Failed to load service worker script: ${error.message}`, {
+			console.error(error);
+			return new Response(`// Failed to load service worker script: ${error}`, {
 				headers: { "Content-Type": "application/javascript; charset=utf-8" },
 				status: 500,
 			});
