@@ -4,6 +4,24 @@ import { createError, eventHandler, getQuery, sendRedirect } from "h3";
 import { db_find, db_insert, db_update } from "@/utils/db";
 import { completeQQOAuth } from "@/utils/qq-oauth";
 
+// 域名校验函数
+function isAllowedDomain(url: string): boolean {
+	const allowedDomains = process.env.ALLOWED_DOMAINS?.split(',') || [];
+	
+	try {
+		const urlObj = new URL(url);
+		const hostname = urlObj.hostname.toLowerCase();
+		
+		// 检查是否匹配允许的域名或其子域名
+		return allowedDomains.some(domain => {
+			const normalizedDomain = domain.trim().toLowerCase();
+			return hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`);
+		});
+	} catch {
+		return false;
+	}
+}
+
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
 	const code = query.code as string;
@@ -16,7 +34,13 @@ export default eventHandler(async (event) => {
 	if (stateParam) {
 		try {
 			const parsedState = JSON.parse(stateParam);
-			returnUrl = parsedState.return_url || returnUrl;
+			const requestedReturnUrl = parsedState.return_url;
+			
+			// 验证 return_url 域名安全
+			if (requestedReturnUrl && isAllowedDomain(requestedReturnUrl)) {
+				returnUrl = requestedReturnUrl;
+			}
+			
 			originalState = parsedState.original_state;
 		} catch {
 			// 如果state不是JSON格式，当作普通state处理
@@ -42,10 +66,8 @@ export default eventHandler(async (event) => {
 		// 检查用户是否已存在
 		const existingUser = await db_find("space-api", "users", { qq_openid: oauthResult.openId });
 
-		let userId: string;
 		if (existingUser) {
 			// 更新现有用户信息
-			userId = existingUser._id.toString();
 			await db_update("space-api", "users", { qq_openid: oauthResult.openId }, {
 				nickname: oauthResult.userInfo.nickname,
 				avatar: oauthResult.userInfo.figureurl_qq_2 || oauthResult.userInfo.figureurl_2,
@@ -66,16 +88,12 @@ export default eventHandler(async (event) => {
 			if (!insertResult) {
 				throw new Error("Failed to save user information");
 			}
-
-			// 获取新创建的用户ID
-			const savedUser = await db_find("space-api", "users", { qq_openid: oauthResult.openId });
-			userId = savedUser?._id.toString() || "";
 		}
 
 		// 保存临时代码
 		await db_insert("space-api", "temp_codes", {
 			code: tempCode,
-			user_id: userId,
+			qq_openid: oauthResult.openId,
 			created_at: new Date(),
 			expires_at: expiresAt,
 			used: false,

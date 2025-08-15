@@ -1,7 +1,41 @@
-import { createError, eventHandler, getQuery } from "h3";
+import process from "node:process";
+import dotenv from "dotenv";
+import { createError, eventHandler, getHeader, getQuery } from "h3";
 import { db_delete, db_find } from "@/utils/db";
 
+dotenv.config();
+
+// 域名校验函数
+function isAllowedOrigin(origin: string | undefined): boolean {
+	if (!origin)
+		return false;
+
+	const allowedDomains = process.env.ALLOWED_DOMAINS?.split(",") || [];
+
+	try {
+		const url = new URL(origin);
+		const hostname = url.hostname.toLowerCase();
+
+		// 检查是否匹配允许的域名或其子域名
+		return allowedDomains.some((domain) => {
+			const normalizedDomain = domain.trim().toLowerCase();
+			return hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`);
+		});
+	} catch {
+		return false;
+	}
+}
+
 export default eventHandler(async (event) => {
+	// 域名安全校验
+	const origin = getHeader(event, "origin") || getHeader(event, "referer");
+	if (!isAllowedOrigin(origin)) {
+		throw createError({
+			statusCode: 403,
+			statusMessage: "Access denied: Invalid origin",
+		});
+	}
+
 	const query = getQuery(event);
 	const code = query.code as string;
 
@@ -32,7 +66,7 @@ export default eventHandler(async (event) => {
 		}
 
 		// 获取用户信息
-		const user = await db_find("space-api", "users", { _id: tempCodeRecord.user_id });
+		const user = await db_find("space-api", "users", { qq_openid: tempCodeRecord.qq_openid });
 
 		if (!user) {
 			throw createError({
