@@ -4,23 +4,6 @@ import { createError, eventHandler, getQuery, sendRedirect } from "h3";
 import { db_find, db_insert, db_update } from "@/utils/db";
 import { completeQQOAuth } from "@/utils/qq-oauth";
 
-// 域名校验函数
-function isAllowedDomain(url: string): boolean {
-	const allowedDomains = process.env.ALLOWED_DOMAINS?.split(',') || [];
-	
-	try {
-		const urlObj = new URL(url);
-		const hostname = urlObj.hostname.toLowerCase();
-		
-		// 检查是否匹配允许的域名或其子域名
-		return allowedDomains.some(domain => {
-			const normalizedDomain = domain.trim().toLowerCase();
-			return hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`);
-		});
-	} catch {
-		return false;
-	}
-}
 
 export default eventHandler(async (event) => {
 	const query = getQuery(event);
@@ -36,8 +19,8 @@ export default eventHandler(async (event) => {
 			const parsedState = JSON.parse(stateParam);
 			const requestedReturnUrl = parsedState.return_url;
 			
-			// 验证 return_url 域名安全
-			if (requestedReturnUrl && isAllowedDomain(requestedReturnUrl)) {
+			// 直接使用请求的返回URL
+			if (requestedReturnUrl) {
 				returnUrl = requestedReturnUrl;
 			}
 			
