@@ -14,7 +14,7 @@ export default eventHandler(async (event) => {
 
 	try {
 		// 查找临时代码
-		const tempCodeRecord = await db_find("space_api", "temp_codes", { code, used: false });
+		const tempCodeRecord = await db_find("space-api", "temp_codes", { code, used: false });
 
 		if (!tempCodeRecord) {
 			throw createError({
@@ -32,7 +32,7 @@ export default eventHandler(async (event) => {
 		}
 
 		// 获取用户信息
-		const user = await db_find("space_api", "users", { _id: tempCodeRecord.user_id });
+		const user = await db_find("space-api", "users", { _id: tempCodeRecord.user_id });
 
 		if (!user) {
 			throw createError({
@@ -42,7 +42,7 @@ export default eventHandler(async (event) => {
 		}
 
 		// 移除临时代码
-		await db_delete("space_api", "temp_codes", { _id: tempCodeRecord._id });
+		await db_delete("space-api", "temp_codes", { _id: tempCodeRecord._id });
 
 		// 返回用户信息（不包含敏感信息）
 		const response: ApiResponse<{
