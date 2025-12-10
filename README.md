@@ -1,277 +1,121 @@
-# Space API
+# Space API Rust
 
-基于 Nitro 构建的 API 服务，提供友链管理、图片处理等功能。
+这是天翔TNXGの空间站API的Rust实现版本，使用Rocket框架构建。
 
-## 技术栈
+## 功能特性
 
-- **框架**: Nitro (基于 h3 的轻量级服务端框架)
-- **数据库**: MongoDB
-- **语言**: TypeScript
-- **图片处理**: Sharp
-- **邮件服务**: Nodemailer
-- **开发工具**: ESLint, pnpm
+- 用户认证与管理
+- 头像处理与缓存
+- 邮件发送与验证
+- 网易云音乐API集成
+- QQ OAuth登录
+- 友情链接管理
+- 状态监控
 
-## 环境配置
+## 项目结构
 
-1. 复制 `.env.template` 到 `.env`
-2. 配置以下环境变量：
-   ```env
-   MONGO_HOST=MongoDB主机地址
-   MONGO_PORT=MongoDB端口
-   MONGO_USER=MongoDB用户名
-   MONGO_PASSWORD=MongoDB密码
-   JWT_SECRET=JWT密钥
-   CODETIME_SESSION=CodeTime会话ID
-   EMAIL_HOST=SMTP服务器地址
-   EMAIL_PORT=SMTP服务器端口（默认587）
-   EMAIL_USER=SMTP用户名
-   EMAIL_PASS=SMTP密码
-   ```
+```
+space-api-rs/
+├── src/
+│   ├── main.rs              # 应用程序入口
+│   ├── lib.rs               # 模块注册与导出
+│   ├── config/              # 配置模块
+│   ├── routes/              # API路由
+│   ├── services/            # 业务服务
+│   ├── cache/               # 缓存模块
+│   ├── utils/               # 工具模块
+│   └── models/              # 数据模型
+└── Cargo.toml               # 项目依赖
+```
 
-## 开发调试
+## 安装与运行
+
+### 前提条件
+
+- Rust 1.72.0 或更高版本
+- MongoDB 数据库
+- FFmpeg（用于媒体处理）
+
+### 配置
+
+1. 复制示例环境变量文件并进行设置：
 
 ```bash
-# 安装依赖
-pnpm install
-
-# 开发模式
-pnpm dev
-
-# 构建项目
-pnpm build
-
-# 预览构建结果
-pnpm preview
+cp .env.example .env
 ```
 
-## API 接口
+2. 根据你的环境修改 `.env` 文件中的配置。
 
-### 友链管理
+### 构建与运行
 
-#### `POST /links/verify` - 发送友链验证码
+```bash
+# 安装依赖并构建
+cargo build
 
-**请求参数：**
-
-```typescript
-{
-	email: string; // 接收验证码的邮箱地址
-}
+# 运行服务器
+cargo run
 ```
 
-**响应数据：**
+默认情况下，API服务器将在 `http://localhost:8000` 运行。
 
-```typescript
-{
-	code: string; // 状态码
-	status: string; // 状态：success 或 error
-	message: string; // 响应消息
-}
+## API 端点
+
+### 基础
+
+- `GET /` - API基本信息
+
+### 用户
+
+- `GET /user/info` - 获取用户信息
+- `GET /user/get` - 获取用户列表
+
+### 状态
+
+- `GET /status/ncm` - 获取网易云音乐播放状态
+- `GET /status/codetime` - 获取代码时间统计
+
+### 头像
+
+- `GET /avatar` - 获取并处理头像图像
+
+### 图像
+
+- `GET /images/wallpaper` - 获取壁纸图像
+- `GET /images/wallpaper_height` - 获取壁纸信息
+
+### 邮件
+
+- `POST /email/send` - 发送验证邮件
+- `POST /email/verify` - 验证邮箱
+
+### 链接
+
+- `GET /links` - 获取友情链接列表
+- `POST /links/submit` - 提交新链接
+- `POST /links/verify` - 验证链接
+
+### OAuth
+
+- `GET /oauth/qq/login` - QQ登录链接
+- `GET /oauth/qq/callback` - QQ登录回调
+
+## 测试
+
+运行测试套件：
+
+```bash
+cargo test
 ```
 
-**错误类型：**
+## 性能优化
 
-- `400` - 邮箱地址未提供
-- `500` - 验证码生成失败或发送失败
+本项目使用了以下技术进行性能优化：
 
-#### `POST /links/submit` - 提交友链
+- 基于Moka的高性能缓存系统
+- 异步处理所有IO操作
+- 响应式数据处理
+- 高效的图像处理
 
-**请求参数：**
+## 许可证
 
-```typescript
-{
-  name: string;        // 网站名称
-  url: string;         // 网站地址
-  avatar: string;      // 头像URL
-  description: string; // 网站描述
-  email: string;       // 联系邮箱
-  code: string;        // 验证码
-  rssurl?: string;     // RSS地址（可选）
-  techstack?: string[]; // 技术栈（可选）
-}
-```
-
-**响应数据：**
-
-```typescript
-{
-  code: string;       // 状态码
-  status: string;     // 状态：success 或 error
-  message: string;    // 响应消息
-  data?: {           // 成功时返回的数据
-    name: string;
-    url: string;
-    avatar: string;
-    description: string;
-    state: number;
-    created: string;
-    rssurl: string;
-    techstack: string[];
-    blogger: string;  // 博主名字
-  }
-}
-```
-
-**错误类型：**
-
-- `400` - 缺少必填字段
-- `401` - 验证码无效
-- `409` - URL已存在
-- `500` - 数据插入失败
-
-#### `GET /links` - 获取友链列表
-
-**查询参数：**
-
-- `page` - 页码（默认：1）
-- `size` - 每页数量（默认：50）
-
-**响应数据：**
-
-```typescript
-{
-	code: string; // 状态码
-	status: string; // 状态：success 或 error
-	data: Array<{ // 友链列表
-		name: string;
-		url: string;
-		avatar: string;
-		description: string;
-		state: number;
-		created: string;
-		rssurl: string;
-		techstack: string[];
-	}>;
-	message: { // 分页信息
-		pagination: {
-			total: number; // 总记录数
-			current_page: number; // 当前页码
-			total_page: number; // 总页数
-			size: number; // 每页数量
-			has_next_page: boolean;
-			has_prev_page: boolean;
-		}
-	}
-}
-```
-
-**错误类型：**
-
-- `400` - 无效的页码或大小参数
-
-### 图片服务
-
-#### `GET /avatar` - 获取头像
-
-**查询参数：**
-
-- `s` 或 `source` - 头像来源（可选值：qq/QQ、github/GitHub/gh/GH，默认使用自定义头像）
-
-**响应：**
-
-- 成功：返回图片数据，支持WebP等现代图片格式
-- 失败：返回JSON格式错误信息
-  ```typescript
-  {
-  	code: string; // 状态码
-  	message: string; // 错误信息
-  	status: string; // error
-  }
-  ```
-
-**错误类型：**
-
-- `500` - 获取头像失败
-
-#### `GET /images/wallpaper` - 获取壁纸
-
-**查询参数：**
-
-- `type` 或 `t` - 返回类型
-  - `cdn` - 返回CDN直链（302重定向）
-  - `json` - 返回JSON格式的图片信息
-  - 默认返回图片数据
-
-**响应：**
-
-- `type=cdn`：302重定向到CDN地址
-- `type=json`：
-  ```typescript
-  {
-  	code: string; // 状态码
-  	status: string; // success
-  	data: {
-  		image: string; // 图片URL
-  		blurhash: string; // BlurHash编码
-  	}
-  }
-  ```
-- 默认：返回图片数据
-
-**错误类型：**
-
-- `500` - 获取图片失败
-
-### 状态监控
-
-#### `GET /status` - 获取博主状态信息
-
-**查询参数：**
-
-- `s` 或 `source` - 数据来源（默认：codetime）
-- `q` 或 `query` - 查询ID（默认：515522946）
-- `sse` - 是否启用服务器发送事件（默认：false）
-- `interval` 或 `i` - SSE更新间隔，单位毫秒（默认：5000）
-
-**响应数据：**
-
-```typescript
-{
-  code: string;      // 状态码
-  status: string;    // 状态：success 或 error
-  message: string;   // 响应消息
-  data?: {          // 状态数据
-    id: number;     // 记录ID
-    user: {         // 用户信息
-      id: string;
-      avatar: string;
-      name: string;
-      active: boolean;
-    };
-    song?: {        // 当前播放歌曲（如果有）
-      name: string;
-      transNames: string[];
-      alias: string[];
-      id: string;
-      artists: Array<{
-        id: string;
-        name: string;
-      }>;
-      album: {
-        name: string;
-        id: string;
-        image: string;
-        publishTime: string;
-        artists: Array<{
-          id: string;
-          name: string;
-        }>;
-      };
-    };
-    lastUpdate: string; // 最后更新时间
-  }
-}
-```
-
-**错误类型：**
-
-- `400` - 无效的参数（interval < 1000ms、无效的source或query）
-
-### 其他
-
-#### `GET /` - API根路径
-
-返回API基本信息
-
-#### `GET /sw.js` - Service Worker脚本
-
-返回Service Worker脚本文件
+MIT

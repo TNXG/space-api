@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Status | 天翔TNXGの空间站</title>
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Iconify & UA Parser -->
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/UAParser.js/1.0.35/ua-parser.min.js"></script>
+
+    <style>
+        :root {
+            /* 基础色调：保持冷白与深灰 */
+            --bg-color: #F5F7FA;
+            --card-bg: rgba(255, 255, 255, 0.94);
+            --text-main: #2C3E50;
+            --text-sub: #7F8C8D;
+            --accent-color: #C0392B; /* 故宫红 */
+            --rust-color: #000000;   /* Rust 品牌色 */
+            --border-color: rgba(0,0,0,0.06);
+            --shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+            
+            --font-sans: "MiSans", "PingFang SC", system-ui, sans-serif;
+            --font-serif: "Noto Serif SC", "Songti SC", serif; /* 标语用宋体 */
+            --font-mono: "JetBrains Mono", "SF Mono", monospace;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #0F0F0F;
+                --card-bg: rgba(30, 30, 30, 0.9);
+                --text-main: #ECF0F1;
+                --text-sub: #95A5A6;
+                --accent-color: #E74C3C;
+                --rust-color: #FFFFFF;
+                --border-color: rgba(255,255,255,0.08);
+                --shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            /* 极简网格背景 */
+            background-image: 
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 760px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            padding: 48px;
+            position: relative;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            overflow: hidden;
+        }
+
+        /* 顶部装饰条 */
+        .card-top-accent {
+            position: absolute; top: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-color), transparent);
+        }
+
+        /* Header */
+        header { margin-bottom: 24px; }
+        
+        .header-top {
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
+
+        h1 {
+            font-size: 1.6rem; font-weight: 600; letter-spacing: -0.03em;
+            margin-bottom: 4px; display: flex; align-items: center; gap: 10px;
+        }
+
+        .subtitle {
+            font-size: 0.85rem; color: var(--text-sub); font-family: var(--font-mono);
+            letter-spacing: 0.05em; text-transform: uppercase;
+        }
+
+        .version-tag {
+            background: var(--text-main); color: var(--bg-color);
+            font-size: 0.7rem; padding: 2px 6px; border-radius: 4px;
+            font-weight: bold;
+        }
+
+        /* 标语样式 - 放在 Header 下方 */
+        .quote-section {
+            margin: 24px 0 36px 0;
+            padding-left: 16px;
+            border-left: 3px solid var(--accent-color);
+        }
+        
+        .quote-main {
+            font-size: 1.1rem;
+            font-family: var(--font-serif);
+            font-weight: 500;
+            margin-bottom: 6px;
+            opacity: 0.95;
+        }
+        
+        .quote-sub {
+            font-size: 0.85rem;
+            color: var(--text-sub);
+            font-weight: 400;
+        }
+
+        /* 网格布局 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px 32px;
+        }
+
+        @media (max-width: 600px) {
+            .grid { grid-template-columns: 1fr; gap: 24px; }
+            .card { padding: 24px; }
+        }
+
+        /* 单个信息项 */
+        .info-item { display: flex; flex-direction: column; gap: 6px; }
+
+        .label {
+            font-size: 0.75rem; color: var(--text-sub);
+            text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        .value {
+            font-family: var(--font-mono); font-size: 0.95rem;
+            color: var(--text-main);
+            min-height: 1.4em; /* 防止文字加载时高度跳变 */
+            display: flex; align-items: center;
+        }
+
+        /* 环境分析面板 (重构版) */
+        .env-panel {
+            grid-column: 1 / -1; /* 占满整行 */
+            background: rgba(127, 127, 127, 0.05);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+        }
+        
+        .env-title { margin-bottom: 16px; color: var(--text-main); opacity: 0.8; }
+
+        .env-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+        }
+        
+        @media (max-width: 600px) { .env-grid { grid-template-columns: 1fr; } }
+
+        /* 骨架屏动画 - 用于防抖动 */
+        .skeleton {
+            display: inline-block;
+            height: 1em;
+            width: 100px;
+            background: linear-gradient(90deg, var(--border-color) 25%, rgba(127,127,127,0.1) 50%, var(--border-color) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .copyright { font-size: 0.75rem; color: var(--text-sub); }
+
+        /* 改进的 Tech Badge */
+        .tech-badges {
+            display: flex; gap: 12px; align-items: center;
+        }
+
+        .tech-pill {
+            display: flex; align-items: center; gap: 6px;
+            font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            transition: transform 0.2s;
+        }
+        
+        .tech-pill:hover { transform: translateY(-1px); }
+        .tech-pill iconify-icon { font-size: 1rem; }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <main class="card">
+        <div class="card-top-accent"></div>
+
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>
+                        TNXG Space Station
+                        <span class="version-tag">{{ version }}</span>
+                    </h1>
+                    <div class="subtitle">API Gateway Interface</div>
+                </div>
+                <!-- 简单的状态绿点 -->
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #27AE60; font-weight: bold; background: rgba(39, 174, 96, 0.1); padding: 4px 8px; border-radius: 20px;">
+                    <div style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></div>
+                    ONLINE
+                </div>
+            </div>
+        </header>
+
+        <!-- 标语区域 -->
+        <div class="quote-section">
+            <div class="quote-main">迷子でもいい、迷子でも進め。</div>
+            <div class="quote-sub">即使迷茫也无妨，迷茫着也要砥砺前行。</div>
+        </div>
+
+        <div class="grid">
+            <!-- Server Time -->
+            <div class="info-item">
+                <div class="label">
+                    <iconify-icon icon="mingcute:time-line"></iconify-icon>
+                    Server Time
+                </div>
+                <div class="value">{{ server_time }}</div>
+            </div>
+
+            <!-- Client IP -->
+            <div class="info-item">
+                <div class="label">
+                    <iconify-icon icon="mingcute:earth-line"></iconify-icon>
+                    Client IP Addr
+                </div>
+                <div class="value">{{ client_ip }}</div>
+            </div>
+
+            <!-- Location -->
+            <div class="info-item">
+                <div class="label">
+                    <iconify-icon icon="mingcute:location-line"></iconify-icon>
+                    Region Info
+                </div>
+                <div class="value">
+                    {% if client_location == "Unknown Region" %}
+                        Direct Connection
+                    {% else %}
+                        {{ client_location }}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Protocol -->
+            <div class="info-item">
+                <div class="label">
+                    <iconify-icon icon="mingcute:transfer-line"></iconify-icon>
+                    Connection Protocol
+                </div>
+                <!-- 动态显示协议 -->
+                <div class="value">{{ client_protocol }}</div>
+            </div>
+
+            <!-- Client Environment Analysis (Integrated) -->
+            <div class="env-panel">
+                <div class="label env-title">
+                    <iconify-icon icon="mingcute:computer-line"></iconify-icon>
+                    Client Environment Analysis
+                </div>
+                
+                <div class="env-grid">
+                    <!-- Browser -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Browser Engine</div>
+                        <!-- 默认显示骨架屏，JS加载后替换内容 -->
+                        <div class="value" id="ua-browser">
+                            <span class="skeleton" style="width: 120px;"></span>
+                        </div>
+                    </div>
+
+                    <!-- OS -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Operating System</div>
+                        <div class="value" id="ua-os">
+                            <span class="skeleton" style="width: 100px;"></span>
+                        </div>
+                    </div>
+
+                    <!-- Device -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Device Model</div>
+                        <div class="value" id="ua-device">
+                            <span class="skeleton" style="width: 80px;"></span>
+                        </div>
+                    </div>
+
+                    <!-- Architecture -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Architecture</div>
+                        <div class="value" id="ua-cpu">
+                            <span class="skeleton" style="width: 60px;"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <div class="copyright">&copy; 2025 天翔TNXG</div>
+            
+            <div class="tech-badges">
+                <div class="tech-pill">
+                    <iconify-icon icon="simple-icons:rust" style="color: var(--text-main);"></iconify-icon>
+                    RUST
+                </div>
+                <div class="tech-pill">
+                    <iconify-icon icon="simple-icons:rocket" style="color: var(--accent-color);"></iconify-icon>
+                    ROCKET.RS
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Hidden Raw Data -->
+    <div id="raw-ua" style="display:none;">{{ raw_ua }}</div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const rawUA = document.getElementById('raw-ua').textContent;
+            
+            // 1. 基础解析
+            const parser = new UAParser(rawUA);
+            const r = parser.getResult();
+
+            // 预设默认值 (Fallback)
+            let browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
+            let os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
+            let device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
+            let cpu = r.cpu.architecture || 'Unknown Arch';
+
+            // 2. Client Hints 增强
+            if (navigator.userAgentData) {
+                try {
+                    const hints = await navigator.userAgentData.getHighEntropyValues([
+                        "architecture", "bitness", "model", "platformVersion", "fullVersionList"
+                    ]);
+
+                    if (hints.architecture) cpu = `${hints.architecture} ${hints.bitness ? '('+hints.bitness+'bit)' : ''}`;
+                    if (hints.model) device = hints.model;
+                    
+                    // Windows 版本修正
+                    if (hints.platform === 'Windows') {
+                        const majorVer = parseInt(hints.platformVersion.split('.')[0]);
+                        os = majorVer >= 13 ? 'Windows 11' : 'Windows 10';
+                    } else if (hints.platform) {
+                        os = `${hints.platform} ${hints.platformVersion || ''}`;
+                    }
+
+                    // 浏览器品牌修正
+                    const brand = hints.brands.find(b => !["Not A(Brand", "Chromium"].includes(b.brand));
+                    if (brand) browser = `${brand.brand} ${brand.version}`;
+
+                } catch (e) { console.log("CH Error", e); }
+            }
+
+            // 3. 渲染数据 (移除骨架屏)
+            const setText = (id, text) => {
+                const el = document.getElementById(id);
+                if(el) {
+                    el.innerHTML = text; // 替换掉 skeleton span
+                    el.style.color = "var(--text-main)"; // 确保颜色正确
+                }
+            };
+
+            // 模拟极短的延迟让用户感知到系统正在“分析”，增加科技感，同时确保渲染平滑
+            setTimeout(() => {
+                setText('ua-browser', browser);
+                setText('ua-os', os);
+                setText('ua-device', device);
+                setText('ua-cpu', cpu);
+            }, 300);
+        });
+    </script>
+</body>
+</html>
