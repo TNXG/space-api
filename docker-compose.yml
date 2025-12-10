@@ -1,33 +1,16 @@
 services:
   space-api:
     container_name: space-api
-    # Replace with your actual image name if pulling from registry
-    # image: ghcr.io/your-username/space-api-rs:latest
-    build: .
+    image: ghcr.io/tnxg/space-api:latest
     restart: always
     ports:
-      - "8000:8000"
+      - "3000:3000"
     volumes:
-      # Mount configuration file
       - ./config.toml:/app/config.toml
     environment:
       - TZ=Asia/Shanghai
-    # network_mode: "host" # Uncomment if needed for local mongo
-    depends_on:
-      - mongo
-
-  mongo:
-    image: mongo:latest
-    container_name: mongo
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    environment:
-      # MONGO_INITDB_ROOT_USERNAME: admin
-      # MONGO_INITDB_ROOT_PASSWORD: password
-      TZ: Asia/Shanghai
-
-volumes:
-  mongo-data:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

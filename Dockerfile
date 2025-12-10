@@ -3,32 +3,34 @@ FROM rust:alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies (musl-dev is essential for Alpine/Rust)
-# Add nasm so rav1e can build its ASM
+# 安装构建依赖
 RUN apk add --no-cache musl-dev nasm
 
-# 1. Create a dummy project to cache dependencies
-RUN mkdir -p src
-RUN echo "fn main() {}" > src/main.rs
+# 复制依赖定义文件，构建缓存
 COPY Cargo.toml Cargo.lock ./
 
-# Build dependencies only
+# 创建空的src/main.rs避免cargo报错
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+
+# 预先构建依赖
 RUN cargo build --release
 
-# 2. Build the actual application
-COPY src ./src
-RUN touch src/main.rs
+# 复制全部源码（包括src/templates）
+COPY ./src ./src
+
+# 重新构建正式二进制
 RUN cargo build --release
 
-# Runtime Stage
+# 运行时镜像
 FROM alpine:latest
 
 WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata
 
-# Copy binary from builder
 COPY --from=builder /app/target/release/space-api-rs .
+
+COPY --from=builder /app/src/templates ./src/templates
 
 EXPOSE 3000
 
