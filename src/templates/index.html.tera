@@ -18,12 +18,13 @@
             --text-main: #2C3E50;
             --text-sub: #7F8C8D;
             --accent-color: #C0392B; /* 故宫红 */
+            --accent-color-rgb: 192, 57, 43; /* 为了 rgba 使用 */
             --rust-color: #000000;   /* Rust 品牌色 */
             --border-color: rgba(0,0,0,0.06);
             --shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
             
             --font-sans: "MiSans", "PingFang SC", system-ui, sans-serif;
-            --font-serif: "Noto Serif SC", "Songti SC", serif; /* 标语用宋体 */
+            --font-serif: "Noto Serif SC", "Songti SC", serif;
             --font-mono: "JetBrains Mono", "SF Mono", monospace;
         }
 
@@ -34,6 +35,7 @@
                 --text-main: #ECF0F1;
                 --text-sub: #95A5A6;
                 --accent-color: #E74C3C;
+                --accent-color-rgb: 231, 76, 60;
                 --rust-color: #FFFFFF;
                 --border-color: rgba(255,255,255,0.08);
                 --shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
@@ -102,7 +104,7 @@
             font-weight: bold;
         }
 
-        /* 标语样式 - 放在 Header 下方 */
+        /* 标语样式 */
         .quote-section {
             margin: 24px 0 36px 0;
             padding-left: 16px;
@@ -147,13 +149,13 @@
         .value {
             font-family: var(--font-mono); font-size: 0.95rem;
             color: var(--text-main);
-            min-height: 1.4em; /* 防止文字加载时高度跳变 */
+            min-height: 1.4em;
             display: flex; align-items: center;
         }
 
-        /* 环境分析面板 (重构版) */
+        /* 环境分析面板 */
         .env-panel {
-            grid-column: 1 / -1; /* 占满整行 */
+            grid-column: 1 / -1;
             background: rgba(127, 127, 127, 0.05);
             border-radius: 8px;
             padding: 20px;
@@ -169,7 +171,7 @@
         
         @media (max-width: 600px) { .env-grid { grid-template-columns: 1fr; } }
 
-        /* 骨架屏动画 - 用于防抖动 */
+        /* 骨架屏动画 */
         .skeleton {
             display: inline-block;
             height: 1em;
@@ -194,7 +196,6 @@
 
         .copyright { font-size: 0.75rem; color: var(--text-sub); }
 
-        /* 改进的 Tech Badge */
         .tech-badges {
             display: flex; gap: 12px; align-items: center;
         }
@@ -233,7 +234,7 @@
                     </h1>
                     <div class="subtitle">API Gateway Interface</div>
                 </div>
-                <!-- 简单的状态绿点 -->
+                <!-- Status Dot -->
                 <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #27AE60; font-weight: bold; background: rgba(39, 174, 96, 0.1); padding: 4px 8px; border-radius: 20px;">
                     <div style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></div>
                     ONLINE
@@ -241,7 +242,7 @@
             </div>
         </header>
 
-        <!-- 标语区域 -->
+        <!-- Quote -->
         <div class="quote-section">
             <div class="quote-main">迷子でもいい、迷子でも進め。</div>
             <div class="quote-sub">即使迷茫也无妨，迷茫着也要砥砺前行。</div>
@@ -287,11 +288,57 @@
                     <iconify-icon icon="mingcute:transfer-line"></iconify-icon>
                     Connection Protocol
                 </div>
-                <!-- 动态显示协议 -->
                 <div class="value">{{ client_protocol }}</div>
             </div>
 
-            <!-- Client Environment Analysis (Integrated) -->
+            <!-- Server Status Panel -->
+            <!-- 修复：这里使用了新定义的 --accent-color-rgb 变量 -->
+            <div class="env-panel" style="background: rgba(var(--accent-color-rgb), 0.03);">
+                <div class="label env-title">
+                    <iconify-icon icon="mingcute:server-line"></iconify-icon>
+                    Server Status
+                </div>
+                
+                <div class="env-grid">
+                    <!-- OS & Kernel -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">System</div>
+                        <div class="value" style="font-size: 0.85rem;" title="{{ sys_kernel }}">
+                            {{ sys_os }} ({{ sys_arch }})
+                        </div>
+                    </div>
+
+                    <!-- Uptime -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Uptime</div>
+                        <div class="value" style="font-size: 0.85rem;" title="Boot: {{ sys_boot_time }}">
+                            {{ sys_uptime }}
+                        </div>
+                    </div>
+
+                    <!-- Load & Services -->
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                        <div class="label" style="font-size: 0.7rem; justify-content: space-between;">
+                            <span>Load / Mem</span>
+                            <span style="{% if mongo_status == 'Connected' %}color: #27AE60;{% else %}color: #C0392B;{% endif %} font-size: 0.7rem;">
+                                MongoDB: {{ mongo_status }}
+                            </span>
+                        </div>
+                        <div class="value" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px;">
+                            <div style="font-size: 0.8rem; width: 100%; display: flex; justify-content: space-between;">
+                                <span>Load: {{ sys_load_avg }}</span>
+                                <span>{{ mem_used }} / {{ mem_total }}</span>
+                            </div>
+                            <!-- Memory Bar -->
+                            <div style="width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
+                                <div style="width: {{ mem_percent }}%; height: 100%; background: var(--accent-color); opacity: 0.8;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Environment Analysis -->
             <div class="env-panel">
                 <div class="label env-title">
                     <iconify-icon icon="mingcute:computer-line"></iconify-icon>
@@ -302,7 +349,6 @@
                     <!-- Browser -->
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">Browser Engine</div>
-                        <!-- 默认显示骨架屏，JS加载后替换内容 -->
                         <div class="value" id="ua-browser">
                             <span class="skeleton" style="width: 120px;"></span>
                         </div>
@@ -358,17 +404,14 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const rawUA = document.getElementById('raw-ua').textContent;
             
-            // 1. 基础解析
             const parser = new UAParser(rawUA);
             const r = parser.getResult();
 
-            // 预设默认值 (Fallback)
             let browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
             let os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
             let device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
             let cpu = r.cpu.architecture || 'Unknown Arch';
 
-            // 2. Client Hints 增强
             if (navigator.userAgentData) {
                 try {
                     const hints = await navigator.userAgentData.getHighEntropyValues([
@@ -378,7 +421,6 @@
                     if (hints.architecture) cpu = `${hints.architecture} ${hints.bitness ? '('+hints.bitness+'bit)' : ''}`;
                     if (hints.model) device = hints.model;
                     
-                    // Windows 版本修正
                     if (hints.platform === 'Windows') {
                         const majorVer = parseInt(hints.platformVersion.split('.')[0]);
                         os = majorVer >= 13 ? 'Windows 11' : 'Windows 10';
@@ -386,23 +428,20 @@
                         os = `${hints.platform} ${hints.platformVersion || ''}`;
                     }
 
-                    // 浏览器品牌修正
                     const brand = hints.brands.find(b => !["Not A(Brand", "Chromium"].includes(b.brand));
                     if (brand) browser = `${brand.brand} ${brand.version}`;
 
                 } catch (e) { console.log("CH Error", e); }
             }
 
-            // 3. 渲染数据 (移除骨架屏)
             const setText = (id, text) => {
                 const el = document.getElementById(id);
                 if(el) {
-                    el.innerHTML = text; // 替换掉 skeleton span
-                    el.style.color = "var(--text-main)"; // 确保颜色正确
+                    el.innerHTML = text; 
+                    el.style.color = "var(--text-main)";
                 }
             };
 
-            // 模拟极短的延迟让用户感知到系统正在“分析”，增加科技感，同时确保渲染平滑
             setTimeout(() => {
                 setText('ua-browser', browser);
                 setText('ua-os', os);

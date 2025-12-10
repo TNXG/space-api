@@ -10,9 +10,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
     
     let config = config::settings::load_config();
-    if let Err(e) = db_service::initialize_db(&config.mongo).await {
-        eprintln!("⚠️  数据库初始化失败: {}", e);
-    }
+    let mongo_client = match db_service::initialize_db(&config.mongo).await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("⚠️  数据库初始化失败: {}", e);
+            return Err(e.into());
+        }
+    };
 
     let figment = rocket::Config::figment()
         .merge(("template_dir", "src/templates")); 
@@ -30,7 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/status", routes::status::routes())
         .mount("/", routes::sw::routes())
         .mount("/user", routes::user::routes())
-        .manage(config);
+        .manage(config)
+        .manage(mongo_client);
         
     println!(r#"
   ____                                         _ 

@@ -12,9 +12,9 @@ use tokio::sync::Mutex;
 
 static DB_INSTANCE: OnceCell<Arc<Mutex<Database>>> = OnceCell::new();
 
-pub async fn initialize_db(config: &MongoConfig) -> Result<()> {
+pub async fn initialize_db(config: &MongoConfig) -> Result<Client> {
     if DB_INSTANCE.get().is_some() {
-        return Ok(());
+        return Err(Error::Database("Database already initialized".to_string()));
     }
 
     let mut uri = format!("mongodb://{}:{}", config.host, config.port);
@@ -55,7 +55,7 @@ pub async fn initialize_db(config: &MongoConfig) -> Result<()> {
         .set(db_arc)
         .expect("Failed to set database instance");
 
-    Ok(())
+    Ok(client)
 }
 
 pub async fn get_db() -> Result<Arc<Mutex<Database>>> {
