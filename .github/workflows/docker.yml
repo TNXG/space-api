@@ -9,6 +9,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # 设置二进制文件名，方便后续引用
+  BINARY_NAME: space-api-rs
 
 jobs:
   build:
@@ -20,6 +22,34 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # 1. 安装 Rust 工具链，并添加 musl 目标 (为了兼容 Alpine)
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      # 2. 安装 musl 编译依赖 (在 Ubuntu 上编译 musl 程序需要)
+      # 如果原来的 Dockerfile 用到了 nasm，这里也要装上
+      - name: Install musl tools & dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools nasm
+
+      # 3. 配置 Rust 缓存 (极大提升构建速度)
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      # 4. 编译 Release 版本 (指定 target 为 musl)
+      - name: Build binary
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      # 5. 准备文件 (将构建好的二进制移动到根目录，方便 Docker 读取)
+      # 注意：target 目录下会有 x86_64-unknown-linux-musl 子目录
+      - name: Prepare binary for Docker
+        run: |
+          mv target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }} ./${{ env.BINARY_NAME }}
+          chmod +x ./${{ env.BINARY_NAME }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -40,6 +70,8 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=semver,pattern={{version}}
 
+      # 6. 构建并推送 Docker 镜像
+      # 此时 context 目录里已经有了 space-api-rs 二进制文件
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:

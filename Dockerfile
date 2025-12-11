@@ -1,38 +1,16 @@
-# Build Stage
-FROM rust:alpine AS builder
-
-WORKDIR /app
-
-# 安装构建依赖
-RUN apk add --no-cache musl-dev nasm
-
-# 复制依赖定义文件，构建缓存
-COPY Cargo.toml Cargo.lock ./
-
-# 创建空的src/main.rs避免cargo报错
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-
-# 预先构建依赖
-RUN cargo build --release
-
-# 复制全部源码（包括src/templates）
-COPY ./src ./src
-
-# 重新构建正式二进制
-RUN cargo build --release
-
-# 运行时镜像
+# 这是一个纯运行时镜像，不需要 rust 环境
 FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates tzdata
+# 直接从当前目录（构建上下文）复制二进制文件
+# 注意：文件名需要和你在 Action 中重命名的一致
+COPY space-api-rs .
 
-COPY --from=builder /app/target/release/space-api-rs .
+# 复制资源文件
+COPY src/templates ./src/templates
 
-COPY --from=builder /app/src/templates ./src/templates
-
-EXPOSE 3000
+EXPOSE 8000
 
 ENV CONFIG_PATH=/app/config.toml
 ENV ROCKET_ADDRESS=0.0.0.0
