@@ -14,3 +14,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - core_mx-space
+networks:
+  core_mx-space:
+    external: true

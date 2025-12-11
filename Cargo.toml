@@ -71,3 +71,6 @@ ravif = "0.12.0"
 url = "2.5.7"
 rocket_dyn_templates = { version = "0.2.0", features = ["tera"] }
 sysinfo = "0.37.2"
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+tikv-jemallocator = "0.6"
