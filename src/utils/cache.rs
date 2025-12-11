@@ -48,3 +48,63 @@ where
 {
     cache.remove(key).await;
 }
+
+// ==========================================
+// Disk Cache Implementation
+// ==========================================
+
+use std::fs;
+use std::path::PathBuf;
+use std::time::SystemTime;
+
+const CACHE_DIR: &str = "cache";
+const IMAGE_CACHE_TTL: u64 = 30; // 30 seconds
+
+fn get_cache_path(key: &str) -> PathBuf {
+    let mut path = PathBuf::from(CACHE_DIR);
+    // Use md5 hash for filename to avoid special characters
+    let hash = format!("{:x}", md5::compute(key));
+    path.push(hash);
+    path
+}
+
+pub fn put_disk(key: &str, value: &[u8]) {
+    if let Err(e) = fs::create_dir_all(CACHE_DIR) {
+        eprintln!("[Cache] Failed to create cache dir: {}", e);
+        return;
+    }
+
+    let path = get_cache_path(key);
+    if let Err(e) = fs::write(&path, value) {
+        eprintln!("[Cache] Failed to write cache file {:?}: {}", path, e);
+    }
+}
+
+pub fn get_disk(key: &str) -> Option<Vec<u8>> {
+    let path = get_cache_path(key);
+    
+    if !path.exists() {
+        return None;
+    }
+
+    // Check expiration
+    if let Ok(metadata) = fs::metadata(&path) {
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                if elapsed.as_secs() > IMAGE_CACHE_TTL {
+                    // Expired
+                    let _ = fs::remove_file(&path);
+                    return None;
+                }
+            }
+        }
+    }
+
+    match fs::read(&path) {
+        Ok(data) => Some(data),
+        Err(e) => {
+            eprintln!("[Cache] Failed to read cache file {:?}: {}", path, e);
+            None
+        }
+    }
+}

@@ -56,7 +56,8 @@ async fn serve_wallpaper(
         Some("cdn") => {
             // 302 跳转
             let resp = CustomResponse::new(ContentType::Plain, Vec::new(), Status::Found)
-                .with_header("Location", cdn_url);
+                .with_header("Location", cdn_url)
+                .with_header("Cache-Control", "no-cache");
             Ok(resp)
         }
         Some("json") => {
@@ -73,8 +74,9 @@ async fn serve_wallpaper(
             });
 
             let body = serde_json::to_vec(&payload).unwrap_or_default();
+            // JSON 不缓存
             let resp = CustomResponse::new(ContentType::JSON, body, Status::Ok)
-                .with_header("Cache-Control", "public, max-age=30"); // JSON 缓存 30s
+                .with_header("Cache-Control", "no-cache");
             Ok(resp)
         }
         _ => {
@@ -92,6 +94,7 @@ async fn serve_wallpaper(
                     let content_type = match format {
                         ImageFormat::Png => ContentType::PNG,
                         ImageFormat::WebP => ContentType::new("image", "webp"),
+                        ImageFormat::Avif => ContentType::new("image", "avif"),
                         _ => ContentType::JPEG, // 默认为 JPEG
                     };
 

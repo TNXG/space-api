@@ -17,8 +17,8 @@ impl ImageService {
 
     // 从URL获取图像数据，返回 (bytes, cache_hit)
     pub async fn fetch_image(&self, url: &str) -> Result<(Vec<u8>, bool)> {
-        // 检查缓存
-        if let Some(cached_image) = cache::get(&cache::CACHE_BUCKET, &url.to_string()).await {
+        // 检查磁盘缓存
+        if let Some(cached_image) = cache::get_disk(url) {
             return Ok((cached_image, true));
         }
 
@@ -44,8 +44,15 @@ impl ImageService {
             .map_err(|e| Error::Internal(format!("Failed to read image bytes: {}", e)))?
             .to_vec();
 
-        // 缓存图像
-        cache::put(&cache::CACHE_BUCKET, url.to_string(), image_bytes.clone()).await;
+        // 写入磁盘缓存
+        let url_clone = url.to_string();
+        let bytes_clone = image_bytes.clone();
+        
+        // 异步写入缓存（虽然 put_disk 是同步文件IO，但在 simple implementation 中直接调用即可，或者放入 spawn_blocking）
+        // 这里简单直接调用
+        tokio::task::spawn_blocking(move || {
+            cache::put_disk(&url_clone, &bytes_clone);
+        });
 
         Ok((image_bytes, false))
     }
@@ -102,13 +109,16 @@ impl ImageService {
             "image/png" => ImageFormat::Png,
             "image/gif" => ImageFormat::Gif,
             "image/webp" => ImageFormat::WebP,
+            "image/avif" => ImageFormat::Avif,
             _ => ImageFormat::Jpeg, // 默认为JPEG
         }
     }
 
     // 根据Accept头获取最合适的图像格式
     pub fn get_preferred_image_format(&self, accept_header: &str) -> ImageFormat {
-        if accept_header.contains("image/webp") {
+        if accept_header.contains("image/avif") {
+            ImageFormat::Avif
+        } else if accept_header.contains("image/webp") {
             ImageFormat::WebP
         } else if accept_header.contains("image/png") {
             ImageFormat::Png
