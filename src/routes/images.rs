@@ -1,108 +1,68 @@
 use crate::services::image_service::ImageService;
 use crate::utils::custom_response::CustomResponse;
-use crate::utils::response::ApiResponse;
 use crate::Result;
 use image::ImageFormat;
 use once_cell::sync::Lazy;
 use rocket::http::{Accept, ContentType, Status};
-use rocket::serde::json::Json;
-use rocket::{get, routes, Route};
-use serde::{Deserialize, Serialize};
+use rocket::{get, routes, Route, State}; // 导入 State
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
-use std::path::PathBuf;
-
-#[derive(Debug, Serialize)]
-pub struct WallpaperInfo {
-    width: u32,
-    height: u32,
-    format: String,
-    size_kb: f64,
-}
 
 #[derive(Debug, Deserialize, Default)]
 struct BlurhashData {
     weight: HashMap<String, String>,
-    #[allow(dead_code)]
-    height: Option<HashMap<String, String>>,
+    height: HashMap<String, String>,
 }
 
-fn blurhash_json_path() -> PathBuf {
-    // 可执行时当前目录通常为 space-api-rs；向上一级定位到 Node 项目的 src/data/blurhash.json
-    // 路径: space-api-rs/../src/data/blurhash.json
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.push("../src/data/blurhash.json");
-    p
-}
+const BLURHASH_RAW: &str = include_str!("../../src/data/blurhash.json");
 
 static BLURHASH: Lazy<BlurhashData> = Lazy::new(|| {
-    let path = blurhash_json_path();
-    match std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<BlurhashData>(&s).ok())
-    {
-        Some(data) => data,
-        None => {
-            eprintln!(
-                "[images] Failed to load blurhash.json from {:?}. Fallback to empty map.",
-                path
-            );
-            BlurhashData::default()
-        }
-    }
+    serde_json::from_str(BLURHASH_RAW).unwrap_or_else(|e| {
+        eprintln!("[images] Failed to parse embedded blurhash.json: {}", e);
+        BlurhashData::default()
+    })
 });
 
-static MAX_WALLPAPER_NUM: Lazy<u32> = Lazy::new(|| {
-    BLURHASH
-        .weight
-        .keys()
+static MAX_WEIGHT_NUM: Lazy<u32> = Lazy::new(|| get_max_id(&BLURHASH.weight));
+
+static MAX_HEIGHT_NUM: Lazy<u32> = Lazy::new(|| get_max_id(&BLURHASH.height));
+
+fn get_max_id(map: &HashMap<String, String>) -> u32 {
+    map.keys()
         .filter_map(|k| k.split('.').next().and_then(|n| n.parse::<u32>().ok()))
         .max()
         .unwrap_or(1)
-});
-
-// 获取壁纸信息
-#[get("/wallpaper_height")]
-async fn wallpaper_height() -> Json<ApiResponse<WallpaperInfo>> {
-    // 模拟壁纸信息，实际实现中应该从配置或数据库获取
-    let info = WallpaperInfo {
-        width: 1920,
-        height: 1080,
-        format: "jpg".to_string(),
-        size_kb: 1024.5,
-    };
-
-    ApiResponse::success(info, "Wallpaper info retrieved successfully")
 }
 
-// 获取壁纸图像（复刻 TS 逻辑：随机选择、type/t 参数、Accept 协商、JSON/302/图片返回）
-#[get("/wallpaper?<t>")]
-async fn wallpaper(t: Option<String>, accept: &Accept) -> Result<CustomResponse> {
-    // 计算随机 imageId
-    let max_num = *MAX_WALLPAPER_NUM;
-    let image_id: u32 = rand::random_range(1..=max_num);
+async fn serve_wallpaper(
+    t: Option<String>,
+    r#type: Option<String>,
+    accept: &Accept,
+    service: &State<ImageService>,
+    map: &HashMap<String, String>,
+    max_num: u32,
+    url_prefix: &str,
+) -> Result<CustomResponse> {
+    let req_type = r#type.or(t);
+
+    let image_id = rand::random_range(1..=max_num);
     let image_id_str = image_id.to_string();
+    let filename = format!("{}.jpg", image_id_str);
 
-    let cdn_url = format!(
-        "https://cdn.tnxg.top/images/wallpaper/{}.jpg",
-        image_id_str
-    );
+    let cdn_url = format!("{}/{}", url_prefix, filename);
 
-    // 统一读取 type / t 参数
-    let req_type = t.as_deref();
-
-    // 处理分支：cdn/json/默认图片
-    match req_type {
+    match req_type.as_deref() {
         Some("cdn") => {
-            // 302 跳转到 CDN
+            // 302 跳转
             let resp = CustomResponse::new(ContentType::Plain, Vec::new(), Status::Found)
                 .with_header("Location", cdn_url);
-            return Ok(resp);
+            Ok(resp)
         }
         Some("json") => {
-            // 返回 JSON（带 blurhash 和缓存头）
-            let key = format!("{}.jpg", image_id_str);
-            let blurhash = BLURHASH.weight.get(&key).cloned().unwrap_or_default();
+            // JSON 返回
+            let blurhash = map.get(&filename).cloned().unwrap_or_default();
+
             let payload = json!({
                 "code": "200",
                 "status": "success",
@@ -111,50 +71,90 @@ async fn wallpaper(t: Option<String>, accept: &Accept) -> Result<CustomResponse>
                     "blurhash": blurhash,
                 }
             });
-            let body = payload.to_string().into_bytes();
+
+            let body = serde_json::to_vec(&payload).unwrap_or_default();
             let resp = CustomResponse::new(ContentType::JSON, body, Status::Ok)
-                .with_header("Cache-Control", "public, max-age=30");
-            return Ok(resp);
-        }
-        _ => {}
-    }
-
-    // 默认：取图并按 Accept 协商格式返回（webp > png > jpeg）
-    let image_service = ImageService::new();
-    let accept_str = accept.to_string();
-
-    // 拉取源 JPG
-    match image_service.fetch_image(&cdn_url).await {
-        Ok((image_data, cache_hit)) => {
-            let format = image_service.get_preferred_image_format(&accept_str);
-            let processed = image_service
-                .process_image(image_data, None, None, format)
-                .await?;
-
-            let content_type = match format {
-                ImageFormat::Jpeg => ContentType::JPEG,
-                ImageFormat::Png => ContentType::PNG,
-                ImageFormat::WebP => ContentType::new("image", "webp"),
-                _ => ContentType::JPEG,
-            };
-
-            let resp = CustomResponse::new(content_type, processed, Status::Ok).with_cache(cache_hit);
+                .with_header("Cache-Control", "public, max-age=30"); // JSON 缓存 30s
             Ok(resp)
         }
-        Err(e) => {
-            eprintln!("Error fetching wallpaper: {}", e);
-            let payload = json!({
-                "code": "500",
-                "message": "Error fetching wallpaper",
-                "status": "failed"
-            });
-            let body = payload.to_string().into_bytes();
-            let resp = CustomResponse::new(ContentType::JSON, body, Status::InternalServerError);
-            Ok(resp)
+        _ => {
+            // 默认：代理图片并处理格式
+            let accept_str = accept.to_string();
+
+            match service.fetch_image(&cdn_url).await {
+                Ok((image_data, _upstream_cache_hit)) => {
+                    let format = service.get_preferred_image_format(&accept_str);
+
+                    let processed = service
+                        .process_image(image_data, None, None, format)
+                        .await?;
+
+                    let content_type = match format {
+                        ImageFormat::Png => ContentType::PNG,
+                        ImageFormat::WebP => ContentType::new("image", "webp"),
+                        _ => ContentType::JPEG, // 默认为 JPEG
+                    };
+
+                    // 设置图片缓存 30s
+                    let resp = CustomResponse::new(content_type, processed, Status::Ok)
+                        .with_header("Cache-Control", "public, max-age=30");
+                    Ok(resp)
+                }
+                Err(e) => {
+                    eprintln!("Error fetching wallpaper [{}]: {}", cdn_url, e);
+                    let payload = json!({
+                        "code": "500",
+                        "message": "Error fetching wallpaper source",
+                        "status": "failed"
+                    });
+                    let body = serde_json::to_vec(&payload).unwrap();
+                    let resp =
+                        CustomResponse::new(ContentType::JSON, body, Status::InternalServerError);
+                    Ok(resp)
+                }
+            }
         }
     }
 }
 
+#[get("/wallpaper?<t>&<type>")]
+async fn wallpaper(
+    t: Option<String>,
+    r#type: Option<String>,
+    accept: &Accept,
+    service: &State<ImageService>,
+) -> Result<CustomResponse> {
+    serve_wallpaper(
+        t,
+        r#type,
+        accept,
+        service,
+        &BLURHASH.weight,
+        *MAX_WEIGHT_NUM,
+        "https://cdn.tnxg.top/images/wallpaper",
+    )
+    .await
+}
+
+#[get("/wallpaper_height?<t>&<type>")]
+async fn wallpaper_height(
+    t: Option<String>,
+    r#type: Option<String>,
+    accept: &Accept,
+    service: &State<ImageService>,
+) -> Result<CustomResponse> {
+    serve_wallpaper(
+        t,
+        r#type,
+        accept,
+        service,
+        &BLURHASH.height,                        // 使用 height 数据
+        *MAX_HEIGHT_NUM,                         // 使用 height 最大值
+        "https://cdn.tnxg.top/images/wallpaper", // 如果竖屏图在不同目录，请修改这里
+    )
+    .await
+}
+
 pub fn routes() -> Vec<Route> {
-    routes![wallpaper_height, wallpaper]
+    routes![wallpaper, wallpaper_height]
 }

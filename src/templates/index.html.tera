@@ -1,31 +1,41 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Status | 天翔TNXGの空间站</title>
     <meta name="robots" content="noindex, nofollow">
 
-    <!-- Iconify & UA Parser -->
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/UAParser.js/1.0.35/ua-parser.min.js"></script>
+    <!-- Chart.js for line charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <style>
         :root {
-            /* 基础色调：保持冷白与深灰 */
             --bg-color: #F5F7FA;
             --card-bg: rgba(255, 255, 255, 0.94);
             --text-main: #2C3E50;
             --text-sub: #7F8C8D;
-            --accent-color: #C0392B; /* 故宫红 */
-            --accent-color-rgb: 192, 57, 43; /* 为了 rgba 使用 */
-            --rust-color: #000000;   /* Rust 品牌色 */
-            --border-color: rgba(0,0,0,0.06);
+            --accent-color: #C0392B;
+            --accent-color-rgb: 192, 57, 43;
+            --success-color: #27AE60;
+            --warning-color: #F39C12;
+            --border-color: rgba(0, 0, 0, 0.06);
             --shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
-            
-            --font-sans: "MiSans", "PingFang SC", system-ui, sans-serif;
-            --font-serif: "Noto Serif SC", "Songti SC", serif;
-            --font-mono: "JetBrains Mono", "SF Mono", monospace;
+            --chart-cpu-color: #E74C3C;
+            --chart-mem-color: #3498DB;
+
+            --font-sans: "MiSans", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei",
+                "Source Han Sans SC", "Noto Sans CJK SC", system-ui, -apple-system, BlinkMacSystemFont,
+                "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+            --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong",
+                "SimSun", "NSimSun", "SimSun-ExtB", "WenQuanYi Bitmap Song",
+                "AR PL UMing CN", "AR PL UKai CN", "Times New Roman", Times, Georgia, serif;
+            --font-mono: "JetBrains Mono", "SF Mono", "Consolas", "Menlo", "Monaco",
+                "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono CJK SC",
+                "Source Han Mono SC", "WenQuanYi Micro Hei Mono", "SimSun", "NSimSun", monospace;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -36,13 +46,20 @@
                 --text-sub: #95A5A6;
                 --accent-color: #E74C3C;
                 --accent-color-rgb: 231, 76, 60;
-                --rust-color: #FFFFFF;
-                --border-color: rgba(255,255,255,0.08);
+                --success-color: #2ECC71;
+                --warning-color: #F1C40F;
+                --border-color: rgba(255, 255, 255, 0.08);
                 --shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+                --chart-cpu-color: #E74C3C;
+                --chart-mem-color: #5DADE2;
             }
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             font-family: var(--font-sans);
@@ -53,8 +70,7 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
-            /* 极简网格背景 */
-            background-image: 
+            background-image:
                 linear-gradient(var(--border-color) 1px, transparent 1px),
                 linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
             background-size: 40px 40px;
@@ -74,43 +90,91 @@
             overflow: hidden;
         }
 
-        /* 顶部装饰条 */
         .card-top-accent {
-            position: absolute; top: 0; left: 0; right: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
             height: 4px;
             background: linear-gradient(90deg, var(--accent-color), transparent);
         }
 
-        /* Header */
-        header { margin-bottom: 24px; }
-        
+        header {
+            margin-bottom: 24px;
+        }
+
         .header-top {
-            display: flex; justify-content: space-between; align-items: flex-start;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
 
         h1 {
-            font-size: 1.6rem; font-weight: 600; letter-spacing: -0.03em;
-            margin-bottom: 4px; display: flex; align-items: center; gap: 10px;
+            font-size: 1.6rem;
+            font-weight: 600;
+            letter-spacing: -0.03em;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .subtitle {
-            font-size: 0.85rem; color: var(--text-sub); font-family: var(--font-mono);
-            letter-spacing: 0.05em; text-transform: uppercase;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+            font-family: var(--font-mono);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
         }
 
         .version-tag {
-            background: var(--text-main); color: var(--bg-color);
-            font-size: 0.7rem; padding: 2px 6px; border-radius: 4px;
+            background: var(--text-main);
+            color: var(--bg-color);
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
             font-weight: bold;
         }
 
-        /* 标语样式 */
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .status-badge.online {
+            color: var(--success-color);
+            background: rgba(39, 174, 96, 0.1);
+        }
+
+        .status-badge .dot {
+            width: 6px;
+            height: 6px;
+            background: currentColor;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
         .quote-section {
             margin: 24px 0 36px 0;
             padding-left: 16px;
             border-left: 3px solid var(--accent-color);
         }
-        
+
         .quote-main {
             font-size: 1.1rem;
             font-family: var(--font-serif);
@@ -118,14 +182,13 @@
             margin-bottom: 6px;
             opacity: 0.95;
         }
-        
+
         .quote-sub {
             font-size: 0.85rem;
             color: var(--text-sub);
             font-weight: 400;
         }
 
-        /* 网格布局 */
         .grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -133,56 +196,341 @@
         }
 
         @media (max-width: 600px) {
-            .grid { grid-template-columns: 1fr; gap: 24px; }
-            .card { padding: 24px; }
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .card {
+                padding: 24px;
+            }
         }
 
-        /* 单个信息项 */
-        .info-item { display: flex; flex-direction: column; gap: 6px; }
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
 
         .label {
-            font-size: 0.75rem; color: var(--text-sub);
-            text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;
-            display: flex; align-items: center; gap: 6px;
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .value {
-            font-family: var(--font-mono); font-size: 0.95rem;
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
             color: var(--text-main);
             min-height: 1.4em;
-            display: flex; align-items: center;
+            display: flex;
+            align-items: center;
         }
 
-        /* 环境分析面板 */
-        .env-panel {
+        .panel {
             grid-column: 1 / -1;
-            background: rgba(127, 127, 127, 0.05);
-            border-radius: 8px;
-            padding: 20px;
+            background: rgba(127, 127, 127, 0.04);
+            border-radius: 10px;
+            padding: 20px 24px;
             border: 1px solid var(--border-color);
-            margin-top: 10px;
+            margin-top: 8px;
         }
-        
-        .env-title { margin-bottom: 16px; color: var(--text-main); opacity: 0.8; }
 
-        .env-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+        .panel.accent {
+            background: rgba(var(--accent-color-rgb), 0.03);
+            border-color: rgba(var(--accent-color-rgb), 0.1);
         }
-        
-        @media (max-width: 600px) { .env-grid { grid-template-columns: 1fr; } }
 
-        /* 骨架屏动画 */
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 0.8rem;
+            color: var(--text-main);
+            opacity: 0.85;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .panel-title iconify-icon {
+            font-size: 1.1rem;
+            opacity: 0.7;
+        }
+
+        .panel .info-item {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.02);
+            transition: background 0.2s;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .panel .info-item {
+                background: rgba(255, 255, 255, 0.03);
+                border-color: rgba(255, 255, 255, 0.05);
+            }
+        }
+
+        .panel-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .panel-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .service-tag {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .service-tag.connected {
+            color: var(--success-color);
+            background: rgba(39, 174, 96, 0.1);
+        }
+
+        .service-tag.disconnected {
+            color: var(--accent-color);
+            background: rgba(var(--accent-color-rgb), 0.1);
+        }
+
+        .service-tag .indicator {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* 图表容器样式 */
+        .chart-container {
+            grid-column: 1 / -1;
+            background: rgba(127, 127, 127, 0.03);
+            border-radius: 10px;
+            padding: 20px 24px;
+            border: 1px solid var(--border-color);
+            margin-top: 8px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .chart-title {
+            font-size: 0.8rem;
+            color: var(--text-main);
+            opacity: 0.85;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .chart-title iconify-icon {
+            font-size: 1.1rem;
+            opacity: 0.7;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 16px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            font-weight: 500;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 3px;
+            border-radius: 2px;
+        }
+
+        .legend-color.cpu {
+            background: var(--chart-cpu-color);
+        }
+
+        .legend-color.mem {
+            background: var(--chart-mem-color);
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 180px;
+        }
+
+        .current-stats {
+            display: flex;
+            gap: 32px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .current-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .current-stat .stat-label {
+            font-size: 0.65rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .current-stat .stat-value {
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .current-stat .stat-value.cpu {
+            color: var(--chart-cpu-color);
+        }
+
+        .current-stat .stat-value.mem {
+            color: var(--chart-mem-color);
+        }
+
+        .current-stat .stat-unit {
+            font-size: 0.75rem;
+            font-weight: 400;
+            opacity: 0.7;
+        }
+
+        .load-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 4px;
+        }
+
+        .load-item {
+            flex: 1;
+            text-align: center;
+        }
+
+        .load-item .num {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .load-item .time {
+            font-size: 0.65rem;
+            color: var(--text-sub);
+            margin-top: 2px;
+        }
+
+        .load-divider {
+            width: 1px;
+            height: 16px;
+            background: var(--border-color);
+        }
+
+        .stat-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: 100%;
+            justify-content: center;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+
+        .stat-row .label-mini {
+            font-size: 0.65rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+        }
+
+        .stat-row .val-mini {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .micro-bar-bg {
+            width: 100%;
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .micro-bar-fill {
+            height: 100%;
+            background: var(--accent-color);
+            opacity: 0.8;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
         .skeleton {
             display: inline-block;
             height: 1em;
             width: 100px;
-            background: linear-gradient(90deg, var(--border-color) 25%, rgba(127,127,127,0.1) 50%, var(--border-color) 75%);
+            background: linear-gradient(90deg, var(--border-color) 25%, rgba(127, 127, 127, 0.1) 50%, var(--border-color) 75%);
             background-size: 200% 100%;
             animation: loading 1.5s infinite;
             border-radius: 4px;
         }
 
-        /* Footer */
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
+            }
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
         footer {
             margin-top: 40px;
             padding-top: 24px;
@@ -194,15 +542,24 @@
             gap: 15px;
         }
 
-        .copyright { font-size: 0.75rem; color: var(--text-sub); }
+        .copyright {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+        }
 
         .tech-badges {
-            display: flex; gap: 12px; align-items: center;
+            display: flex;
+            gap: 12px;
+            align-items: center;
         }
 
         .tech-pill {
-            display: flex; align-items: center; gap: 6px;
-            font-family: var(--font-mono); font-size: 0.75rem; font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 700;
             padding: 4px 10px;
             border-radius: 4px;
             background: var(--bg-color);
@@ -210,18 +567,48 @@
             color: var(--text-main);
             transition: transform 0.2s;
         }
-        
-        .tech-pill:hover { transform: translateY(-1px); }
-        .tech-pill iconify-icon { font-size: 1rem; }
 
-        @keyframes loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+        .tech-pill:hover {
+            transform: translateY(-1px);
+        }
+
+        .tech-pill iconify-icon {
+            font-size: 1rem;
+        }
+
+        /* 自动刷新指示器 */
+        .refresh-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.65rem;
+            color: var(--text-sub);
+        }
+
+        .refresh-indicator .spinner {
+            width: 10px;
+            height: 10px;
+            border: 1.5px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .refresh-indicator .spinner.active {
+            opacity: 1;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
-<body>
 
+<body>
     <main class="card">
         <div class="card-top-accent"></div>
 
@@ -234,146 +621,186 @@
                     </h1>
                     <div class="subtitle">API Gateway Interface</div>
                 </div>
-                <!-- Status Dot -->
-                <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #27AE60; font-weight: bold; background: rgba(39, 174, 96, 0.1); padding: 4px 8px; border-radius: 20px;">
-                    <div style="width: 6px; height: 6px; background: currentColor; border-radius: 50%;"></div>
+                <div class="status-badge online">
+                    <div class="dot"></div>
                     ONLINE
                 </div>
             </div>
         </header>
 
-        <!-- Quote -->
         <div class="quote-section">
             <div class="quote-main">迷子でもいい、迷子でも進め。</div>
             <div class="quote-sub">即使迷茫也无妨，迷茫着也要砥砺前行。</div>
         </div>
 
         <div class="grid">
-            <!-- Server Time -->
-            <div class="info-item">
-                <div class="label">
-                    <iconify-icon icon="mingcute:time-line"></iconify-icon>
-                    Server Time
+            <!-- Connection Overview Panel -->
+            <div class="panel" style="grid-column: 1 / -1;">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <iconify-icon icon="mingcute:wifi-line"></iconify-icon>
+                        Connection Overview
+                    </div>
                 </div>
-                <div class="value">{{ server_time }}</div>
+
+                <div class="panel-grid">
+                    <!-- 1. Server Time -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Server Time</div>
+                        <div class="value" style="font-size: 0.85rem;">{{ server_time }}</div>
+                    </div>
+
+                    <!-- 2. Client IP -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Client IP Address</div>
+                        <div class="value" style="font-size: 0.85rem;">{{ client_ip }}</div>
+                    </div>
+
+                    <!-- 3. Location -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Region Info</div>
+                         <div class="value" style="font-size: 0.85rem;">
+                            {% if client_location == "Unknown Region" %}
+                            Direct Connection
+                            {% else %}
+                            {{ client_location }}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- 4. Protocol -->
+                    <div class="info-item">
+                        <div class="label" style="font-size: 0.7rem;">Protocol</div>
+                        <div class="value" style="font-size: 0.85rem;">{{ client_protocol }}</div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Client IP -->
-            <div class="info-item">
-                <div class="label">
-                    <iconify-icon icon="mingcute:earth-line"></iconify-icon>
-                    Client IP Addr
+            <!-- Unified System Monitor Panel -->
+            <div class="panel accent" style="grid-column: 1 / -1;">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <iconify-icon icon="mingcute:server-line"></iconify-icon>
+                        System Monitor
+                    </div>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <div class="refresh-indicator">
+                            <div class="spinner" id="refresh-spinner"></div>
+                            <span id="refresh-text">Live</span>
+                        </div>
+                        <div class="service-tag {% if mongo_status == 'Connected' %}connected{% else %}disconnected{% endif %}">
+                            <span class="indicator"></span>
+                            MongoDB {{ mongo_status }}
+                        </div>
+                    </div>
                 </div>
-                <div class="value">{{ client_ip }}</div>
-            </div>
 
-            <!-- Location -->
-            <div class="info-item">
-                <div class="label">
-                    <iconify-icon icon="mingcute:location-line"></iconify-icon>
-                    Region Info
-                </div>
-                <div class="value">
-                    {% if client_location == "Unknown Region" %}
-                        Direct Connection
-                    {% else %}
-                        {{ client_location }}
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Protocol -->
-            <div class="info-item">
-                <div class="label">
-                    <iconify-icon icon="mingcute:transfer-line"></iconify-icon>
-                    Connection Protocol
-                </div>
-                <div class="value">{{ client_protocol }}</div>
-            </div>
-
-            <!-- Server Status Panel -->
-            <!-- 修复：这里使用了新定义的 --accent-color-rgb 变量 -->
-            <div class="env-panel" style="background: rgba(var(--accent-color-rgb), 0.03);">
-                <div class="label env-title">
-                    <iconify-icon icon="mingcute:server-line"></iconify-icon>
-                    Server Status
-                </div>
-                
-                <div class="env-grid">
-                    <!-- OS & Kernel -->
+                <!-- Top Info Grid: System Details -->
+                <div class="panel-grid" style="margin-bottom: 16px;">
+                    <!-- 1. System -->
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">System</div>
                         <div class="value" style="font-size: 0.85rem;" title="{{ sys_kernel }}">
-                            {{ sys_os }} ({{ sys_arch }})
+                            {{ sys_os }}
                         </div>
+                        <div style="font-size: 0.65rem; color: var(--text-sub); margin-top:2px;">{{ sys_arch }}</div>
                     </div>
 
-                    <!-- Uptime -->
+                    <!-- 2. Uptime -->
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">Uptime</div>
-                        <div class="value" style="font-size: 0.85rem;" title="Boot: {{ sys_boot_time }}">
+                        <div class="value" style="font-size: 0.85rem;">
                             {{ sys_uptime }}
                         </div>
+                        <div style="font-size: 0.65rem; color: var(--text-sub); margin-top:2px;">Since Boot</div>
+                    </div>
+                </div>
+
+                <!-- Resource Chart Section -->
+                <div class="chart-section">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center;">
+                        <span class="label" style="font-size: 0.7rem; display: flex; align-items: center; gap: 6px;">
+                            <iconify-icon icon="mingcute:chart-line-line"></iconify-icon>
+                            Real-time Usage
+                        </span>
+                        <div class="chart-legend">
+                            <div class="legend-item">
+                                <div class="legend-color cpu"></div>
+                                CPU
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color mem"></div>
+                                Memory
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-wrapper" style="height: 200px;">
+                        <canvas id="resourceChart"></canvas>
                     </div>
 
-                    <!-- Load & Services -->
-                    <div class="info-item" style="grid-column: 1 / -1;">
-                        <div class="label" style="font-size: 0.7rem; justify-content: space-between;">
-                            <span>Load / Mem</span>
-                            <span style="{% if mongo_status == 'Connected' %}color: #27AE60;{% else %}color: #C0392B;{% endif %} font-size: 0.7rem;">
-                                MongoDB: {{ mongo_status }}
-                            </span>
-                        </div>
-                        <div class="value" style="flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px;">
-                            <div style="font-size: 0.8rem; width: 100%; display: flex; justify-content: space-between;">
-                                <span>Load: {{ sys_load_avg }}</span>
-                                <span>{{ mem_used }} / {{ mem_total }}</span>
+                    <!-- Current Stats -->
+                    <div class="current-stats" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                        <!-- CPU -->
+                        <div class="current-stat">
+                            <div class="stat-label">CPU Usage</div>
+                            <div class="stat-value cpu" id="current-cpu">
+                                {{ proc_cpu }}<span class="stat-unit">%</span>
                             </div>
-                            <!-- Memory Bar -->
-                            <div style="width: 100%; height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
-                                <div style="width: {{ mem_percent }}%; height: 100%; background: var(--accent-color); opacity: 0.8;"></div>
+                        </div>
+                        
+                        <!-- Memory -->
+                        <div class="current-stat" style="flex: 2;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px;">
+                                <div class="stat-label">Memory Allocation</div>
+                                <div class="stat-value mem" id="current-mem" style="font-size: 1rem;">{{ proc_mem_rss }}</div>
+                            </div>
+                            <div class="micro-bar-bg" title="Usage: {{ proc_mem_percent }}%" style="height: 8px; margin: 8px 0;">
+                                <div class="micro-bar-fill" id="mem-bar" style="width: {{ proc_mem_percent }}%;"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="stat-label" id="mem-percent">{{ proc_mem_percent }}% of Sys Total ({{ sys_mem_total }})</div>
+                                <div class="stat-label">Virtual: <span id="current-virtual" style="font-family: var(--font-mono); color: var(--text-main);">{{ proc_mem_virtual }}</span></div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Client Environment Analysis -->
-            <div class="env-panel">
-                <div class="label env-title">
-                    <iconify-icon icon="mingcute:computer-line"></iconify-icon>
-                    Client Environment Analysis
+            <!-- 面板 2: 客户端环境分析 -->
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <iconify-icon icon="mingcute:computer-line"></iconify-icon>
+                        Client Environment
+                    </div>
                 </div>
-                
-                <div class="env-grid">
-                    <!-- Browser -->
+
+                <div class="panel-grid">
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">Browser Engine</div>
-                        <div class="value" id="ua-browser">
+                        <div class="value" style="font-size: 0.85rem;" id="ua-browser">
                             <span class="skeleton" style="width: 120px;"></span>
                         </div>
                     </div>
 
-                    <!-- OS -->
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">Operating System</div>
-                        <div class="value" id="ua-os">
+                        <div class="value" style="font-size: 0.85rem;" id="ua-os">
                             <span class="skeleton" style="width: 100px;"></span>
                         </div>
                     </div>
 
-                    <!-- Device -->
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">Device Model</div>
-                        <div class="value" id="ua-device">
+                        <div class="value" style="font-size: 0.85rem;" id="ua-device">
                             <span class="skeleton" style="width: 80px;"></span>
                         </div>
                     </div>
 
-                    <!-- Architecture -->
                     <div class="info-item">
                         <div class="label" style="font-size: 0.7rem;">Architecture</div>
-                        <div class="value" id="ua-cpu">
+                        <div class="value" style="font-size: 0.85rem;" id="ua-cpu">
                             <span class="skeleton" style="width: 60px;"></span>
                         </div>
                     </div>
@@ -383,7 +810,6 @@
 
         <footer>
             <div class="copyright">&copy; 2025 天翔TNXG</div>
-            
             <div class="tech-badges">
                 <div class="tech-pill">
                     <iconify-icon icon="simple-icons:rust" style="color: var(--text-main);"></iconify-icon>
@@ -393,62 +819,380 @@
                     <iconify-icon icon="simple-icons:rocket" style="color: var(--accent-color);"></iconify-icon>
                     ROCKET.RS
                 </div>
+                <a href="https://github.com/TNXG/space-api" target="_blank" style="text-decoration: none;">
+                    <div class="tech-pill">
+                        <iconify-icon icon="mingcute:github-line"></iconify-icon>
+                        OPEN SOURCE
+                    </div>
+                </a>
             </div>
         </footer>
     </main>
 
-    <!-- Hidden Raw Data -->
+    <!-- 隐藏数据 -->
     <div id="raw-ua" style="display:none;">{{ raw_ua }}</div>
+    <div id="cpu-history-data" style="display:none;">{{ cpu_history_json | safe }}</div>
+    <div id="mem-history-data" style="display:none;">{{ mem_history_json | safe }}</div>
+    <div id="timestamps-data" style="display:none;">{{ timestamps_json | safe }}</div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const rawUA = document.getElementById('raw-ua').textContent;
-            
-            const parser = new UAParser(rawUA);
-            const r = parser.getResult();
+    // ========================================
+    // 图表初始化与实时更新
+    // ========================================
+    
+    // 获取初始数据
+    let cpuHistory = JSON.parse(document.getElementById('cpu-history-data').textContent || '[]');
+    let memHistory = JSON.parse(document.getElementById('mem-history-data').textContent || '[]');
+    let timestamps = JSON.parse(document.getElementById('timestamps-data').textContent || '[]');
 
-            let browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
-            let os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
-            let device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
-            let cpu = r.cpu.architecture || 'Unknown Arch';
+    // 检测深色模式
+    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    // 图表颜色配置
+    const chartColors = {
+        cpu: '#E74C3C',
+        cpuBg: 'rgba(231, 76, 60, 0.1)',
+        mem: isDarkMode ? '#5DADE2' : '#3498DB',
+        memBg: isDarkMode ? 'rgba(93, 173, 226, 0.1)' : 'rgba(52, 152, 219, 0.1)',
+        grid: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+        text: isDarkMode ? '#95A5A6' : '#7F8C8D'
+    };
 
-            if (navigator.userAgentData) {
-                try {
-                    const hints = await navigator.userAgentData.getHighEntropyValues([
-                        "architecture", "bitness", "model", "platformVersion", "fullVersionList"
-                    ]);
-
-                    if (hints.architecture) cpu = `${hints.architecture} ${hints.bitness ? '('+hints.bitness+'bit)' : ''}`;
-                    if (hints.model) device = hints.model;
-                    
-                    if (hints.platform === 'Windows') {
-                        const majorVer = parseInt(hints.platformVersion.split('.')[0]);
-                        os = majorVer >= 13 ? 'Windows 11' : 'Windows 10';
-                    } else if (hints.platform) {
-                        os = `${hints.platform} ${hints.platformVersion || ''}`;
-                    }
-
-                    const brand = hints.brands.find(b => !["Not A(Brand", "Chromium"].includes(b.brand));
-                    if (brand) browser = `${brand.brand} ${brand.version}`;
-
-                } catch (e) { console.log("CH Error", e); }
-            }
-
-            const setText = (id, text) => {
-                const el = document.getElementById(id);
-                if(el) {
-                    el.innerHTML = text; 
-                    el.style.color = "var(--text-main)";
+    // Chart.js 配置
+    const ctx = document.getElementById('resourceChart').getContext('2d');
+    
+    const resourceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: timestamps,
+            datasets: [
+                {
+                    label: 'CPU %',
+                    data: cpuHistory,
+                    borderColor: chartColors.cpu,
+                    backgroundColor: chartColors.cpuBg,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    pointHoverBackgroundColor: chartColors.cpu,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Memory (MiB)',
+                    data: memHistory,
+                    borderColor: chartColors.mem,
+                    backgroundColor: chartColors.memBg,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    pointHoverBackgroundColor: chartColors.mem,
+                    yAxisID: 'y1'
                 }
-            };
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                    titleColor: isDarkMode ? '#ECF0F1' : '#2C3E50',
+                    bodyColor: isDarkMode ? '#BDC3C7' : '#7F8C8D',
+                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: true,
+                    callbacks: {
+                        label: function(context) {
+                            if (context.datasetIndex === 0) {
+                                return `CPU: ${context.parsed.y.toFixed(2)}%`;
+                            } else {
+                                return `Memory: ${context.parsed.y.toFixed(2)} MiB`;
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    grid: {
+                        color: chartColors.grid,
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: chartColors.text,
+                        font: {
+                            size: 10,
+                            family: "'JetBrains Mono', monospace"
+                        },
+                        maxRotation: 0,
+                        maxTicksLimit: 6
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'CPU %',
+                        color: chartColors.cpu,
+                        font: {
+                            size: 10,
+                            weight: '600'
+                        }
+                    },
+                    grid: {
+                        color: chartColors.grid,
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: chartColors.text,
+                        font: {
+                            size: 10,
+                            family: "'JetBrains Mono', monospace"
+                        },
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    },
+                    min: 0,
+                    suggestedMax: 10
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Memory (MiB)',
+                        color: chartColors.mem,
+                        font: {
+                            size: 10,
+                            weight: '600'
+                        }
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    ticks: {
+                        color: chartColors.text,
+                        font: {
+                            size: 10,
+                            family: "'JetBrains Mono', monospace"
+                        },
+                        callback: function(value) {
+                            return value.toFixed(1);
+                        }
+                    },
+                    min: 0
+                }
+            },
+            animation: {
+                duration: 300
+            }
+        }
+    });
 
-            setTimeout(() => {
-                setText('ua-browser', browser);
-                setText('ua-os', os);
-                setText('ua-device', device);
-                setText('ua-cpu', cpu);
-            }, 300);
-        });
-    </script>
-</body>
-</html>
+    // ========================================
+    // 实时数据更新
+    // ========================================
+    
+    const REFRESH_INTERVAL = 5000; // 5秒刷新一次
+    let isRefreshing = false;
+
+    async function fetchMetrics() {
+        if (isRefreshing) return;
+        
+        isRefreshing = true;
+        const spinner = document.getElementById('refresh-spinner');
+        const refreshText = document.getElementById('refresh-text');
+        
+        spinner.classList.add('active');
+        refreshText.textContent = 'Updating...';
+
+        try {
+            const response = await fetch('/api/metrics');
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const data = await response.json();
+            
+            // 更新图表数据
+            cpuHistory = data.cpu_history;
+            memHistory = data.mem_history;
+            timestamps = data.timestamps;
+            
+            resourceChart.data.labels = timestamps;
+            resourceChart.data.datasets[0].data = cpuHistory;
+            resourceChart.data.datasets[1].data = memHistory;
+            resourceChart.update('none');
+            
+            // 更新当前值显示
+            document.getElementById('current-cpu').innerHTML = 
+                `${data.cpu.toFixed(1)}<span class="stat-unit">%</span>`;
+            document.getElementById('current-mem').textContent = 
+                formatBytes(data.mem_rss);
+            
+            // 更新内存百分比条
+            const totalMem = parseFloat(document.querySelector('[title^="Usage:"]')?.title.match(/[\d.]+/) || 0);
+            if (totalMem > 0) {
+                const memPercent = (data.mem_rss / (parseFloat('{{ sys_mem_total }}'.replace(/[^\d.]/g, '')) * getMultiplier('{{ sys_mem_total }}')) * 100).toFixed(2);
+                document.getElementById('mem-percent').textContent = memPercent + '%';
+                document.getElementById('mem-bar').style.width = memPercent + '%';
+            }
+            
+            refreshText.textContent = 'Live';
+            
+        } catch (error) {
+            console.error('Failed to fetch metrics:', error);
+            refreshText.textContent = 'Error';
+        } finally {
+            isRefreshing = false;
+            spinner.classList.remove('active');
+        }
+    }
+
+    // 格式化字节
+    function formatBytes(bytes) {
+        const KB = 1024;
+        const MB = 1024 * KB;
+        const GB = 1024 * MB;
+
+        if (bytes >= GB) {
+            return (bytes / GB).toFixed(2) + ' GiB';
+        } else if (bytes >= MB) {
+            return (bytes / MB).toFixed(2) + ' MiB';
+        } else {
+            return (bytes / KB).toFixed(2) + ' KiB';
+        }
+    }
+
+    // 获取单位乘数
+    function getMultiplier(str) {
+        if (str.includes('GiB')) return 1024 * 1024 * 1024;
+        if (str.includes('MiB')) return 1024 * 1024;
+        if (str.includes('KiB')) return 1024;
+        return 1;
+    }
+
+    // 定时刷新
+    setInterval(fetchMetrics, REFRESH_INTERVAL);
+
+    // 页面可见性变化时暂停/恢复刷新
+    let refreshInterval = null;
+    
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            // 页面隐藏时不刷新
+        } else {
+            // 页面可见时立即刷新一次
+            fetchMetrics();
+        }
+    });
+
+    // ========================================
+    // UA 解析 (原有逻辑)
+    // ========================================
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        const rawUA = document.getElementById('raw-ua').textContent;
+
+        const parser = new UAParser(rawUA);
+        const r = parser.getResult();
+
+        let browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
+        let os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
+        let device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
+        let cpu = r.cpu.architecture || 'Unknown Arch';
+
+        if (navigator.userAgentData) {
+            try {
+                const hints = await navigator.userAgentData.getHighEntropyValues([
+                    "architecture", "bitness", "model", "platformVersion", "fullVersionList"
+                ]);
+
+                if (hints.architecture) {
+                    cpu = `${hints.architecture} ${hints.bitness ? '(' + hints.bitness + 'bit)' : ''}`;
+                }
+                if (hints.model) {
+                    device = hints.model;
+                }
+
+                if (hints.platform === 'Windows') {
+                    const majorVer = parseInt(hints.platformVersion.split('.')[0]);
+                    os = majorVer >= 13 ? 'Windows 11' : 'Windows 10';
+                } else if (hints.platform) {
+                    os = `${hints.platform} ${hints.platformVersion || ''}`;
+                }
+
+                const brand = hints.brands?.find(b => !["Not A(Brand", "Chromium"].includes(b.brand));
+                if (brand) {
+                    browser = `${brand.brand} ${brand.version}`;
+                }
+
+            } catch (e) {
+                console.log("Client Hints Error:", e);
+            }
+        }
+
+        const setText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.innerHTML = text;
+                el.style.color = "var(--text-main)";
+            }
+        };
+
+        setTimeout(() => {
+            setText('ua-browser', browser);
+            setText('ua-os', os);
+            setText('ua-device', device);
+            setText('ua-cpu', cpu);
+        }, 300);
+    });
+
+    // ========================================
+    // 深色模式切换监听
+    // ========================================
+    
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        const isDark = e.matches;
+        
+        // 更新图表颜色
+        const newColors = {
+            mem: isDark ? '#5DADE2' : '#3498DB',
+            memBg: isDark ? 'rgba(93, 173, 226, 0.1)' : 'rgba(52, 152, 219, 0.1)',
+            grid: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+            text: isDark ? '#95A5A6' : '#7F8C8D'
+        };
+
+        resourceChart.data.datasets[1].borderColor = newColors.mem;
+        resourceChart.data.datasets[1].backgroundColor = newColors.memBg;
+        resourceChart.options.scales.x.grid.color = newColors.grid;
+        resourceChart.options.scales.y.grid.color = newColors.grid;
+        resourceChart.options.scales.x.ticks.color = newColors.text;
+        resourceChart.options.scales.y.ticks.color = newColors.text;
+        resourceChart.options.scales.y1.ticks.color = newColors.text;
+        resourceChart.options.scales.y1.title.color = newColors.mem;
+        
+        // 更新 tooltip 颜色
+        resourceChart.options.plugins.tooltip.backgroundColor = isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+        resourceChart.options.plugins.tooltip.titleColor = isDark ? '#ECF0F1' : '#2C3E50';
+        resourceChart.options.plugins.tooltip.bodyColor = isDark ? '#BDC3C7' : '#7F8C8D';
+        resourceChart.options.plugins.tooltip.borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+        
+        resourceChart.update();
+    });
+</script>
