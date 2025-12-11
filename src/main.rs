@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
  |____/| .__/ \__,_|\___\___|      \__,_| .__/|_|
        |_|                              |_|      
 
- ✿ 🅢 🅟 🅐 🅒 🅔 - 🅐 🅟 🅘 ✿ (v{version} BUILD WITH 🚀 Rust · Rocket.rs Framework)
+ ✿ 🅢 🅟 🅐 🅒 🅔 - 🅐 🅟 🅘 ✿ ({version} BUILD WITH 🚀 Rust · Rocket.rs Framework)
     "#
     );
     rocket.launch().await?;

@@ -1,6 +1,6 @@
 [package]
 name = "space-api-rs"
-version = "25.12.12-rc8"
+version = "25.12.12-p1"
 edition = "2021"
 authors = ["TNXG"]
 description = "天翔TNXGの空间站API - Rust版"

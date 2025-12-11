@@ -3495,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "space-api-rs"
-version = "25.12.12-rc8"
+version = "25.12.12-p1"
 dependencies = [
  "aes",
  "base64",
