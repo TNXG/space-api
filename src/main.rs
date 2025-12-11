@@ -1,14 +1,21 @@
 use dotenv::dotenv;
+use rocket_dyn_templates::Template;
 use space_api_rs::config;
 use space_api_rs::routes;
-use space_api_rs::utils::charset::Utf8CharsetFairing;
-use rocket_dyn_templates::Template;
+use space_api_rs::routes::index::MetricsHistory;
 use space_api_rs::services::db_service;
+use space_api_rs::services::image_service::ImageService;
+use space_api_rs::utils::charset::Utf8CharsetFairing;
+
+// Configure jemallocator
+#[cfg(not(target_os = "windows"))]
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 #[rocket::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
-    
+
     let config = config::settings::load_config();
     let mongo_client = match db_service::initialize_db(&config.mongo).await {
         Ok(c) => c,
@@ -18,8 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let figment = rocket::Config::figment()
-        .merge(("template_dir", "src/templates")); 
+    let figment = rocket::Config::figment().merge(("template_dir", "src/templates"));
 
     // 使用 custom(figment) 替代 build()
     let rocket = rocket::custom(figment)
@@ -35,9 +41,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/", routes::sw::routes())
         .mount("/user", routes::user::routes())
         .manage(config)
-        .manage(mongo_client);
-        
-    println!(r#"
+        .manage(mongo_client)
+        .manage(MetricsHistory::new())
+        .manage(routes::index::SystemState::new())
+        .manage(ImageService::new());
+
+    println!(
+        r#"
   ____                                         _ 
  / ___| _ __   __ _  ___ ___        __ _ _ __ (_)
  \___ \| '_ \ / _` |/ __/ _ \_____ / _` | '_ \| |
@@ -46,8 +56,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
        |_|                              |_|      
 
  ✿ 🅢 🅟 🅐 🅒 🅔 - 🅐 🅟 🅘 ✿ (v3.0.0 BUILD WITH 🚀 Rust · Rocket.rs Framework)
-    "#);
+    "#
+    );
     rocket.launch().await?;
-    
+
     Ok(())
 }

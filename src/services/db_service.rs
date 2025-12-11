@@ -26,18 +26,19 @@ pub async fn initialize_db(config: &MongoConfig) -> Result<Client> {
         );
     }
 
-    let mut client_options = ClientOptions::parse(uri)
-        .await
-        .map_err(|e| Error::Database(e.to_string()))?;
+    // 创建客户端
+    let mut client_options =
+        ClientOptions::parse(uri).await.map_err(|e| Error::Database(e.to_string()))?;
 
     // 设置ServerAPI版本
     let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
-
     client_options.server_api = Some(server_api);
+    
+    // 优化连接池 (默认是100，对于个人项目太大了)
+    client_options.min_pool_size = Some(0);
+    client_options.max_pool_size = Some(10);
 
-    // 创建客户端
-    let client =
-        Client::with_options(client_options).map_err(|e| Error::Database(e.to_string()))?;
+    let client = Client::with_options(client_options).map_err(|e| Error::Database(e.to_string()))?;
 
     // 获取数据库
     let database = client.database(&config.database);
