@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # 如果你的仓库是私有的且需要其他人下载 artifact，可能需要加上 actions: read，但在当前流程通常不需要额外权限
 
     steps:
       - name: Checkout repository
@@ -30,7 +31,6 @@ jobs:
           targets: x86_64-unknown-linux-musl
 
       # 2. 安装 musl 编译依赖 (在 Ubuntu 上编译 musl 程序需要)
-      # 如果原来的 Dockerfile 用到了 nasm，这里也要装上
       - name: Install musl tools & dependencies
         run: |
           sudo apt-get update
@@ -44,12 +44,24 @@ jobs:
       - name: Build binary
         run: cargo build --release --target x86_64-unknown-linux-musl
 
-      # 5. 准备文件 (将构建好的二进制移动到根目录，方便 Docker 读取)
-      # 注意：target 目录下会有 x86_64-unknown-linux-musl 子目录
+      # 5. 准备文件 (将构建好的二进制移动到根目录)
       - name: Prepare binary for Docker
         run: |
           mv target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }} ./${{ env.BINARY_NAME }}
           chmod +x ./${{ env.BINARY_NAME }}
+
+      # --- 新增部分开始 ---
+      # 6. 上传 Artifact (构建产物)
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # 下载时的压缩包名称，建议带上架构后缀
+          name: ${{ env.BINARY_NAME }}-x86_64-musl
+          # 要上传的文件路径 (对应第5步移动后的位置)
+          path: ./${{ env.BINARY_NAME }}
+          # 设置产物保留时间 (可选)
+          retention-days: 7
+      # --- 新增部分结束 ---
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -70,8 +82,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
             type=semver,pattern={{version}}
 
-      # 6. 构建并推送 Docker 镜像
-      # 此时 context 目录里已经有了 space-api-rs 二进制文件
+      # 7. 构建并推送 Docker 镜像
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
