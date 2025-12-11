@@ -1007,98 +1007,88 @@
     });
 
     // ========================================
-    // 实时数据更新
+    // 实时数据更新 (SSE)
     // ========================================
     
-    const REFRESH_INTERVAL = 5000; // 5秒刷新一次
-    let isRefreshing = false;
-
-    async function fetchMetrics() {
-        if (isRefreshing) return;
+    // UI更新函数
+    function updateMetrics(data) {
+        // 更新图表数据
+        cpuHistory = data.cpu_history;
+        memHistory = data.mem_history;
+        timestamps = data.timestamps;
         
-        isRefreshing = true;
-        const spinner = document.getElementById('refresh-spinner');
-        const refreshText = document.getElementById('refresh-text');
+        resourceChart.data.labels = timestamps;
+        resourceChart.data.datasets[0].data = cpuHistory;
+        resourceChart.data.datasets[1].data = memHistory;
+        resourceChart.update('none');
         
-        spinner.classList.add('active');
-        refreshText.textContent = 'Updating...';
+        // 更新当前值显示
+        document.getElementById('current-cpu').innerHTML = 
+            `${data.cpu.toFixed(1)}<span class="stat-unit">%</span>`;
+        document.getElementById('current-mem').textContent = 
+            formatBytes(data.mem_rss);
+        
+        // 更新内存百分比条
+        const totalMem = parseFloat(document.querySelector('[title^="Usage:"]')?.title.match(/[\d.]+/) || 0);
+        if (totalMem > 0 || true) {
+             const memPercent = (data.mem_rss / (parseFloat('{{ sys_mem_total }}'.replace(/[^\d.]/g, '')) * getMultiplier('{{ sys_mem_total }}')) * 100).toFixed(2);
+             document.getElementById('mem-percent').textContent = memPercent + '%';
+             document.getElementById('mem-bar').style.width = memPercent + '%';
+        }
+    }
 
-        try {
-            const response = await fetch('/api/metrics');
-            if (!response.ok) throw new Error('Network response was not ok');
-            
-            const data = await response.json();
-            
-            // 更新图表数据
-            cpuHistory = data.cpu_history;
-            memHistory = data.mem_history;
-            timestamps = data.timestamps;
-            
-            resourceChart.data.labels = timestamps;
-            resourceChart.data.datasets[0].data = cpuHistory;
-            resourceChart.data.datasets[1].data = memHistory;
-            resourceChart.update('none');
-            
-            // 更新当前值显示
-            document.getElementById('current-cpu').innerHTML = 
-                `${data.cpu.toFixed(1)}<span class="stat-unit">%</span>`;
-            document.getElementById('current-mem').textContent = 
-                formatBytes(data.mem_rss);
-            
-            // 更新内存百分比条
-            const totalMem = parseFloat(document.querySelector('[title^="Usage:"]')?.title.match(/[\d.]+/) || 0);
-            if (totalMem > 0) {
-                const memPercent = (data.mem_rss / (parseFloat('{{ sys_mem_total }}'.replace(/[^\d.]/g, '')) * getMultiplier('{{ sys_mem_total }}')) * 100).toFixed(2);
-                document.getElementById('mem-percent').textContent = memPercent + '%';
-                document.getElementById('mem-bar').style.width = memPercent + '%';
-            }
-            
-            refreshText.textContent = 'Live';
-            
-        } catch (error) {
-            console.error('Failed to fetch metrics:', error);
-            refreshText.textContent = 'Error';
-        } finally {
-            isRefreshing = false;
+    const refreshText = document.getElementById('refresh-text');
+    const spinner = document.getElementById('refresh-spinner');
+
+    let evtSource;
+
+    function initSSE() {
+        if (evtSource) {
+            evtSource.close();
+        }
+
+        evtSource = new EventSource("/api/metrics/stream");
+        
+        evtSource.onmessage = (event) => {
+             const data = JSON.parse(event.data);
+             updateMetrics(data);
+             
+             refreshText.textContent = 'Live';
+             spinner.classList.add('active'); // Keep spinner spinning to show activity? Or just "Live"
+             // Maybe blink or something? Let's just keep "Live" static and spinner removed or steady.
+             // User likes active stuff. Let's make the spinner spin slowly or pulse.
+             // Currently spinner has animation: spin 1s linear infinite.
+             spinner.classList.add('active'); 
+        };
+
+        evtSource.onerror = (err) => {
+            console.error("EventSource failed:", err);
+            refreshText.textContent = 'Reconnecting...';
             spinner.classList.remove('active');
-        }
+            // EventSource auto reconnects, but if it fails permanently we might want to logic here.
+        };
+
+        evtSource.onopen = () => {
+             refreshText.textContent = 'Live';
+             spinner.classList.add('active');
+        };
     }
 
-    // 格式化字节
-    function formatBytes(bytes) {
-        const KB = 1024;
-        const MB = 1024 * KB;
-        const GB = 1024 * MB;
+    // 初始化 SSE
+    initSSE();
 
-        if (bytes >= GB) {
-            return (bytes / GB).toFixed(2) + ' GiB';
-        } else if (bytes >= MB) {
-            return (bytes / MB).toFixed(2) + ' MiB';
-        } else {
-            return (bytes / KB).toFixed(2) + ' KiB';
-        }
-    }
-
-    // 获取单位乘数
-    function getMultiplier(str) {
-        if (str.includes('GiB')) return 1024 * 1024 * 1024;
-        if (str.includes('MiB')) return 1024 * 1024;
-        if (str.includes('KiB')) return 1024;
-        return 1;
-    }
-
-    // 定时刷新
-    setInterval(fetchMetrics, REFRESH_INTERVAL);
-
-    // 页面可见性变化时暂停/恢复刷新
-    let refreshInterval = null;
-    
+    // 页面可见性变化时逻辑 (Optional: close stream when hidden to save server resources?)
+    // User didn't request this optimization but it's good practice.
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
-            // 页面隐藏时不刷新
+            if (evtSource) {
+                evtSource.close();
+                evtSource = null;
+                refreshText.textContent = 'Paused';
+                spinner.classList.remove('active');
+            }
         } else {
-            // 页面可见时立即刷新一次
-            fetchMetrics();
+            initSSE();
         }
     });
 

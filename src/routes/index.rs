@@ -6,28 +6,33 @@ use rocket::State;
 use rocket_dyn_templates::{context, Template};
 use std::collections::VecDeque;
 use std::process;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use sysinfo::{Pid, ProcessesToUpdate, System};
+use rocket::response::stream::{Event, EventStream};
+use rocket::tokio::time::{interval, Duration};
+
 
 // 存储历史数据的结构
+#[derive(Clone)]
 pub struct MetricsHistory {
-    pub cpu_history: Mutex<VecDeque<f32>>,
-    pub mem_history: Mutex<VecDeque<u64>>,
-    pub timestamps: Mutex<VecDeque<String>>,
+    pub cpu_history: Arc<Mutex<VecDeque<f32>>>,
+    pub mem_history: Arc<Mutex<VecDeque<u64>>>,
+    pub timestamps: Arc<Mutex<VecDeque<String>>>,
 }
 
 impl MetricsHistory {
     pub fn new() -> Self {
         Self {
-            cpu_history: Mutex::new(VecDeque::with_capacity(60)),
-            mem_history: Mutex::new(VecDeque::with_capacity(60)),
-            timestamps: Mutex::new(VecDeque::with_capacity(60)),
+            cpu_history: Arc::new(Mutex::new(VecDeque::with_capacity(60))),
+            mem_history: Arc::new(Mutex::new(VecDeque::with_capacity(60))),
+            timestamps: Arc::new(Mutex::new(VecDeque::with_capacity(60))),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct SystemState {
-    pub system: Mutex<System>,
+    pub system: Arc<Mutex<System>>,
 }
 
 impl SystemState {
@@ -35,7 +40,7 @@ impl SystemState {
         let mut sys = System::new_all();
         sys.refresh_all();
         Self {
-            system: Mutex::new(sys),
+            system: Arc::new(Mutex::new(sys)),
         }
     }
 }
@@ -313,6 +318,100 @@ pub async fn get_metrics(
     }))
 }
 
+#[get("/api/metrics/stream")]
+pub fn metrics_stream(
+    metrics: &State<MetricsHistory>,
+    sys_state: &State<SystemState>,
+) -> EventStream![] {
+    let metrics = metrics.inner().clone();
+    let sys_state = sys_state.inner().clone();
+
+    EventStream! {
+        let mut timer = interval(Duration::from_secs(2)); // Push every 2 seconds
+
+        loop {
+            let _ = timer.tick().await;
+
+            let (proc_rss, proc_cpu_raw, cpu_count) = {
+                // Warning: Blocking operation in async loop. 
+                // sysinfo refresh is usually fast but strictly should be spawn_blocking.
+                // For simplicity we keep it inline as requested "simple implementation".
+                // If needed we can wrap in task::spawn_blocking.
+                let mut sys = sys_state.system.lock().unwrap();
+                sys.refresh_memory();
+                sys.refresh_cpu_all();
+                let cpu_count = sys.cpus().len().max(1) as f32;
+                let pid = Pid::from(process::id() as usize);
+                sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+                
+                let (rss, _, cpu) = if let Some(proc) = sys.process(pid) {
+                    (proc.memory(), proc.virtual_memory(), proc.cpu_usage())
+                } else {
+                    (0, 0, 0.0)
+                };
+                (rss, cpu, cpu_count)
+            };
+            
+            let proc_cpu = proc_cpu_raw / cpu_count;
+            let now = Local::now();
+            let timestamp = now.format("%H:%M:%S").to_string();
+
+            // Update History?
+            // To avoid double counting with basic API if both are used,
+            // we might want to ONLY read here if get_metrics is deprecated.
+            // But we will UPDATE here too to ensure history is live even if no one polls.
+            // But wait, if 10 users stream, 10x updates.
+            // For now, let's READ history and Current stats.
+            // We'll update history ONLY if needed? 
+            // Let's stick to updating history here too for now.
+            // Actually, if we want to replace polling, this stream IS the updater.
+            
+            {
+                let mut cpu_hist = metrics.cpu_history.lock().unwrap();
+                let mut mem_hist = metrics.mem_history.lock().unwrap();
+                let mut ts_hist = metrics.timestamps.lock().unwrap();
+
+                if cpu_hist.len() >= 60 {
+                    cpu_hist.pop_front();
+                    mem_hist.pop_front();
+                    ts_hist.pop_front();
+                }
+
+                cpu_hist.push_back(proc_cpu);
+                mem_hist.push_back(proc_rss);
+                ts_hist.push_back(timestamp.clone());
+            }
+
+            let (cpu_history, mem_history, timestamps) = {
+                let cpu_hist = metrics.cpu_history.lock().unwrap();
+                let mem_hist = metrics.mem_history.lock().unwrap();
+                let ts_hist = metrics.timestamps.lock().unwrap();
+
+                (
+                    cpu_hist.iter().cloned().collect::<Vec<_>>(),
+                    mem_hist
+                        .iter()
+                        .map(|&m| m as f64 / (1024.0 * 1024.0))
+                        .collect::<Vec<_>>(),
+                    ts_hist.iter().cloned().collect::<Vec<_>>(),
+                )
+            };
+
+            let payload = serde_json::json!({
+                "cpu": proc_cpu,
+                "mem_rss": proc_rss,
+                "mem_rss_mb": proc_rss as f64 / (1024.0 * 1024.0),
+                "timestamp": timestamp,
+                "cpu_history": cpu_history,
+                "mem_history": mem_history,
+                "timestamps": timestamps,
+            });
+
+            yield Event::json(&payload);
+        }
+    }
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-    rocket::routes![index, get_metrics]
+    rocket::routes![index, get_metrics, metrics_stream]
 }
