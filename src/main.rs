@@ -46,6 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(routes::index::SystemState::new())
         .manage(ImageService::new());
 
+    // 从Cargo.toml获取版本号
+    let version = concat!("v", env!("CARGO_PKG_VERSION"));
     println!(
         r#"
   ____                                         _ 
@@ -55,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
  |____/| .__/ \__,_|\___\___|      \__,_| .__/|_|
        |_|                              |_|      
 
- ✿ 🅢 🅟 🅐 🅒 🅔 - 🅐 🅟 🅘 ✿ (v3.0.0 BUILD WITH 🚀 Rust · Rocket.rs Framework)
+ ✿ 🅢 🅟 🅐 🅒 🅔 - 🅐 🅟 🅘 ✿ (v{version} BUILD WITH 🚀 Rust · Rocket.rs Framework)
     "#
     );
     rocket.launch().await?;
