@@ -3495,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "space-api-rs"
-version = "25.12.12-p1"
+version = "25.12.12-rc10"
 dependencies = [
  "aes",
  "base64",
@@ -3521,6 +3521,7 @@ dependencies = [
  "rocket_dyn_templates",
  "serde",
  "serde_json",
+ "sha2",
  "sysinfo",
  "thiserror",
  "tikv-jemallocator",
