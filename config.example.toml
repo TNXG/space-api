@@ -1,0 +1,37 @@
+# Space API Configuration Example
+
+[mongo]
+host = "localhost"            # MongoDB 主机地址
+port = 27017                  # MongoDB 端口
+# user = "username"           # 可选：MongoDB 用户名（如未启用认证可留空）
+# password = "password"       # 可选：MongoDB 密码
+database = "space-api"        # 要连接的数据库名
+
+[email]
+smtp_server = "smtp.example.com"      # SMTP 服务器地址
+smtp_port = 465                       # SMTP 端口（465=SSL，587=TLS）
+username = "noreply@example.com"      # SMTP 登录用户名（通常是邮箱）
+password = "your_email_password"      # SMTP 授权密码或应用专用密码
+from_address = "noreply@example.com"  # 发件人邮箱地址
+from_name = "Space API"               # 发件人显示名称
+
+[oauth]
+qq_app_id = "your_qq_app_id"                # QQ 登录 AppID
+qq_app_key = "your_qq_app_key"              # QQ 登录 AppKey
+redirect_uri = "https://your-domain.com/oauth/qq/callback"  # 回调地址
+
+[memory]
+# 内存管理配置 - 智能内存监控和自动释放功能
+threshold_mb = 500              # 内存阈值（MB），超过此值触发全局内存释放
+# 建议根据服务器内存容量设置，通常为可用内存的60-80%
+check_interval_secs = 30        # 内存检查间隔（秒），后台任务检查内存使用的频率
+# 设置过小会增加 CPU 负担，建议 15-60 秒之间
+gc_cooldown_secs = 30           # GC 最小间隔（秒），避免频繁触发垃圾回收
+# 防止短时间内重复执行内存释放，建议与检查间隔相同或更长
+
+# Why TOML?
+# 1. 语法简单、结构清晰，适合手写配置。
+# 2. 强类型（整数、布尔、字符串等）减少解析歧义。
+# 3. 支持自然的分段结构（如 [mongo]、[email]），便于组织配置。
+# 4. Rust 社区广泛支持（如 toml、config crates），生态成熟，集成方便。
+# 5. 与 JSON 相比更适合配置文件；与 YAML 相比更少坑、更稳定。

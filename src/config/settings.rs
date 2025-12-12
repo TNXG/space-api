@@ -7,6 +7,8 @@ pub struct Config {
     pub mongo: MongoConfig,
     pub email: EmailConfig,
     pub oauth: OAuthConfig,
+    #[serde(default)]
+    pub memory: MemoryConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +35,41 @@ pub struct OAuthConfig {
     pub qq_app_id: String,
     pub qq_app_key: String,
     pub redirect_uri: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryConfig {
+    /// 内存阈值（MB），超过此值将触发全局内存释放
+    #[serde(default = "default_memory_threshold")]
+    pub threshold_mb: u64,
+    /// 内存监控检查间隔（秒）
+    #[serde(default = "default_check_interval")]
+    pub check_interval_secs: u64,
+    /// 垃圾回收冷却时间（秒），避免频繁GC
+    #[serde(default = "default_gc_cooldown")]
+    pub gc_cooldown_secs: u64,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            threshold_mb: default_memory_threshold(),
+            check_interval_secs: default_check_interval(),
+            gc_cooldown_secs: default_gc_cooldown(),
+        }
+    }
+}
+
+fn default_memory_threshold() -> u64 {
+    500
+}
+
+fn default_check_interval() -> u64 {
+    30
+}
+
+fn default_gc_cooldown() -> u64 {
+    30
 }
 
 pub fn load_config() -> Config {

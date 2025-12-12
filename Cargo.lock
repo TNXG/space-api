@@ -299,12 +299,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "block-modes"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e2211b0817f061502a8dd9f11a37e879e79763e3c698d2418cf824d8cb2f21e"
-
-[[package]]
 name = "block-padding"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3495,11 +3489,10 @@ dependencies = [
 
 [[package]]
 name = "space-api-rs"
-version = "25.12.12-rc10"
+version = "25.12.13-rc1"
 dependencies = [
  "aes",
  "base64",
- "block-modes",
  "block-padding 0.4.2",
  "bytes",
  "chrono",
@@ -3509,6 +3502,7 @@ dependencies = [
  "hex",
  "image",
  "lettre",
+ "log",
  "md5",
  "moka",
  "mongodb",
@@ -3524,6 +3518,7 @@ dependencies = [
  "sha2",
  "sysinfo",
  "thiserror",
+ "tikv-jemalloc-ctl",
  "tikv-jemallocator",
  "tokio",
  "tokio-stream",
@@ -3722,6 +3717,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "tikv-jemalloc-ctl"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "661f1f6a57b3a36dc9174a2c10f19513b4866816e13425d3e418b11cc37bc24c"
+dependencies = [
+ "libc",
+ "paste",
+ "tikv-jemalloc-sys",
 ]
 
 [[package]]
