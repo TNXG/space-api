@@ -6,6 +6,7 @@
 ![Rocket](https://img.shields.io/badge/Rocket-v0.5-red?style=flat-square&logo=rust)
 ![MongoDB](https://img.shields.io/badge/MongoDB-Driver-green?style=flat-square&logo=mongodb)
 ![License](https://img.shields.io/badge/License-AGPLv3-blue?style=flat-square)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/TNXG/space-api)
 
 Space API 是一个基于 Rust 语言和 Rocket 框架构建的高性能、异步 RESTful API 服务。它为个人空间站（Blog/Portfolio）提供后端支持，涵盖用户管理、OAuth 认证、邮件服务、状态监控等核心功能。
 
