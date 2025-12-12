@@ -9,10 +9,21 @@ use space_api_rs::utils::charset::Utf8CharsetFairing;
 use space_api_rs::utils::cache;
 use std::time::Duration;
 
-// Configure jemallocator
 #[cfg(not(target_os = "windows"))]
 #[global_allocator]
 static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+#[cfg(not(target_os = "windows"))]
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+pub static malloc_conf: &[u8] = b"\
+background_thread:true,\
+dirty_decay_ms:5000,\
+muzzy_decay_ms:5000,\
+abort_conf:false,\
+metadata_thp:auto,\
+narenas:4\
+\0";
 
 #[rocket::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
