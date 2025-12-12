@@ -57,9 +57,9 @@ async fn get_avatar(
             .with_cache(true));
     }
 
-    // 下载原始图像
+    // 下载原始头像图像（使用专门的头像缓存策略）
     let image_service = ImageService::new();
-    let (raw_bytes, origin_cache_hit) = image_service.fetch_image(origin_url).await?;
+    let (raw_bytes, origin_cache_hit) = image_service.fetch_avatar(origin_url).await?;
     let img = image::load_from_memory(&raw_bytes)
         .map_err(|e| Error::Internal(format!("Failed to decode avatar: {}", e)))?;
 

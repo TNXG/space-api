@@ -6,6 +6,8 @@ use space_api_rs::routes::index::MetricsHistory;
 use space_api_rs::services::db_service;
 use space_api_rs::services::image_service::ImageService;
 use space_api_rs::utils::charset::Utf8CharsetFairing;
+use space_api_rs::utils::cache;
+use std::time::Duration;
 
 // Configure jemallocator
 #[cfg(not(target_os = "windows"))]
@@ -24,6 +26,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err(e.into());
         }
     };
+
+    // 启动缓存清理后台任务
+    tokio::spawn(async {
+        let mut interval = tokio::time::interval(Duration::from_secs(60 * 30)); // 每30分钟清理一次
+        loop {
+            interval.tick().await;
+            cache::cleanup_expired_cache();
+        }
+    });
 
     let figment = rocket::Config::figment().merge(("template_dir", "src/templates"));
 
