@@ -9,10 +9,14 @@
 
     <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/UAParser.js/1.0.35/ua-parser.min.js"></script>
-    <!-- Chart.js for line charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
     <style>
+        [v-cloak] {
+            display: none;
+        }
+
         :root {
             --bg-color: #F5F7FA;
             --card-bg: rgba(255, 255, 255, 0.94);
@@ -21,21 +25,19 @@
             --accent-color: #C0392B;
             --accent-color-rgb: 192, 57, 43;
             --success-color: #27AE60;
+            --success-color-rgb: 39, 174, 96;
             --warning-color: #F39C12;
+            --warning-color-rgb: 243, 156, 18;
             --border-color: rgba(0, 0, 0, 0.06);
             --shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
             --chart-cpu-color: #E74C3C;
             --chart-mem-color: #3498DB;
+            --chart-heap-color: #9B59B6;
+            --chart-sys-mem-color: #F39C12;
 
-            --font-sans: "MiSans", "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei",
-                "Source Han Sans SC", "Noto Sans CJK SC", system-ui, -apple-system, BlinkMacSystemFont,
-                "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
-            --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong",
-                "SimSun", "NSimSun", "SimSun-ExtB", "WenQuanYi Bitmap Song",
-                "AR PL UMing CN", "AR PL UKai CN", "Times New Roman", Times, Georgia, serif;
-            --font-mono: "JetBrains Mono", "SF Mono", "Consolas", "Menlo", "Monaco",
-                "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono CJK SC",
-                "Source Han Mono SC", "WenQuanYi Micro Hei Mono", "SimSun", "NSimSun", monospace;
+            --font-sans: "MiSans", "PingFang SC", system-ui, -apple-system, sans-serif;
+            --font-serif: "Noto Serif SC", serif;
+            --font-mono: "JetBrains Mono", monospace;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -47,11 +49,15 @@
                 --accent-color: #E74C3C;
                 --accent-color-rgb: 231, 76, 60;
                 --success-color: #2ECC71;
+                --success-color-rgb: 46, 204, 113;
                 --warning-color: #F1C40F;
+                --warning-color-rgb: 241, 196, 15;
                 --border-color: rgba(255, 255, 255, 0.08);
                 --shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
                 --chart-cpu-color: #E74C3C;
                 --chart-mem-color: #5DADE2;
+                --chart-heap-color: #AF7AC5;
+                --chart-sys-mem-color: #F1C40F;
             }
         }
 
@@ -70,9 +76,7 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
-            background-image:
-                linear-gradient(var(--border-color) 1px, transparent 1px),
-                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-image: linear-gradient(var(--border-color) 1px, transparent 1px), linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
             background-size: 40px 40px;
         }
 
@@ -86,9 +90,76 @@
             padding: 48px;
             position: relative;
             backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
             overflow: hidden;
         }
+
+@media (min-width: 1200px) {
+    .card {
+        max-width: 1100px !important;
+        padding: 40px 48px !important;
+    }
+
+    /* 外层容器 */
+    .grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 20px !important;
+    }
+
+    /* 上方两个面板并排 */
+    .wide-layout {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 20px !important;
+        width: 100% !important;
+    }
+
+    /* 强制每个 panel 等宽 */
+    .wide-layout > .panel {
+        grid-column: unset !important;
+        margin-top: 0 !important;
+        flex: 1 !important;
+        width: 50% !important;
+        min-width: 0 !important;
+    }
+
+    /* 内部保持 2 列 */
+    .wide-layout > .panel > .panel-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 16px 20px !important;
+    }
+
+    /* System Monitor */
+    .panel.accent {
+        margin-top: 0 !important;
+        width: 100% !important;
+    }
+
+    /* System Monitor 顶部信息 - 靠左排列，不要分散 */
+    .panel.accent > .panel-grid {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 16px 48px !important;
+        justify-content: flex-start !important;
+    }
+
+    .panel.accent > .panel-grid > .info-item {
+        flex: 0 0 auto !important;
+        min-width: 140px !important;
+    }
+
+    /* 底部统计 */
+    .current-stats {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 24px 40px !important;
+    }
+
+    .current-stats > .current-stat:last-child {
+        flex: 1 !important;
+        min-width: 250px !important;
+    }
+}
 
         .card-top-accent {
             position: absolute;
@@ -139,33 +210,92 @@
         .status-badge {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             font-size: 0.75rem;
-            font-weight: bold;
-            padding: 4px 10px;
-            border-radius: 20px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
         .status-badge.online {
             color: var(--success-color);
-            background: rgba(39, 174, 96, 0.1);
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.1), rgba(39, 174, 96, 0.05));
+            border: 1px solid rgba(39, 174, 96, 0.2);
+            box-shadow: 0 2px 8px rgba(39, 174, 96, 0.1);
         }
 
-        .status-badge .dot {
+        .status-badge.offline {
+            color: var(--accent-color);
+            background: linear-gradient(135deg, rgba(192, 57, 43, 0.1), rgba(192, 57, 43, 0.05));
+            border: 1px solid rgba(192, 57, 43, 0.2);
+            box-shadow: 0 2px 8px rgba(192, 57, 43, 0.1);
+        }
+
+        .status-indicator {
+            position: relative;
             width: 6px;
             height: 6px;
-            background: currentColor;
             border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
+            background: currentColor;
+        }
+
+        .status-indicator::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.3;
+            animation: status-pulse 2s ease-in-out infinite;
+        }
+
+        .status-badge.online .status-indicator::before {
+            animation: status-pulse-success 2s ease-in-out infinite;
         }
 
         @keyframes pulse {
+
             0%,
             100% {
                 opacity: 1;
             }
+
             50% {
                 opacity: 0.5;
+            }
+        }
+
+        @keyframes status-pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.3;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        @keyframes status-pulse-success {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.4;
+            }
+
+            50% {
+                transform: scale(2);
+                opacity: 0;
             }
         }
 
@@ -193,76 +323,6 @@
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 24px 32px;
-        }
-
-        @media (max-width: 600px) {
-            body {
-                padding: 12px;
-                align-items: flex-start;
-                padding-top: 20px;
-            }
-
-            .grid {
-                grid-template-columns: 1fr;
-                gap: 16px;
-            }
-
-            .card {
-                padding: 20px;
-                border-radius: 8px;
-            }
-
-            h1 {
-                font-size: 1.4rem;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 6px;
-            }
-
-            .header-top {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 12px;
-            }
-
-            .quote-section {
-                margin: 20px 0 28px 0;
-                padding-left: 12px;
-            }
-
-            .quote-main {
-                font-size: 1rem;
-            }
-
-            .quote-sub {
-                font-size: 0.8rem;
-            }
-        }
-
-        .info-item {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .label {
-            font-size: 0.75rem;
-            color: var(--text-sub);
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .value {
-            font-family: var(--font-mono);
-            font-size: 0.95rem;
-            color: var(--text-main);
-            min-height: 1.4em;
-            display: flex;
-            align-items: center;
         }
 
         .panel {
@@ -305,61 +365,36 @@
             opacity: 0.7;
         }
 
-        .panel .info-item {
-            background: rgba(255, 255, 255, 0.4);
-            border-radius: 8px;
-            padding: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.02);
-            transition: background 0.2s;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            .panel .info-item {
-                background: rgba(255, 255, 255, 0.03);
-                border-color: rgba(255, 255, 255, 0.05);
-            }
-        }
-
         .panel-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 20px;
         }
 
-        @media (max-width: 600px) {
-            .panel {
-                padding: 16px 18px;
-                margin-top: 6px;
-            }
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
 
-            .panel-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 12px;
-                margin-bottom: 16px;
-                padding-bottom: 10px;
-            }
+        .label {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
 
-            .panel-title {
-                font-size: 0.75rem;
-            }
-
-            .panel-grid {
-                grid-template-columns: 1fr;
-                gap: 14px;
-            }
-
-            .panel .info-item {
-                padding: 10px;
-            }
-
-            .label {
-                font-size: 0.7rem;
-            }
-
-            .value {
-                font-size: 0.9rem;
-            }
+        .value {
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            color: var(--text-main);
+            min-height: 1.4em;
+            display: flex;
+            align-items: center;
         }
 
         .service-tag {
@@ -389,7 +424,6 @@
             background: currentColor;
         }
 
-        /* 图表容器样式 */
         .chart-container {
             grid-column: 1 / -1;
             background: rgba(127, 127, 127, 0.03);
@@ -397,32 +431,6 @@
             padding: 20px 24px;
             border: 1px solid var(--border-color);
             margin-top: 8px;
-        }
-
-        .chart-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .chart-title {
-            font-size: 0.8rem;
-            color: var(--text-main);
-            opacity: 0.85;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-        }
-
-        .chart-title iconify-icon {
-            font-size: 1.1rem;
-            opacity: 0.7;
         }
 
         .chart-legend {
@@ -451,6 +459,10 @@
 
         .legend-color.mem {
             background: var(--chart-mem-color);
+        }
+
+        .legend-color.sys-mem {
+            background: var(--chart-sys-mem-color);
         }
 
         .chart-wrapper {
@@ -500,64 +512,6 @@
             opacity: 0.7;
         }
 
-        .load-display {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 4px;
-        }
-
-        .load-item {
-            flex: 1;
-            text-align: center;
-        }
-
-        .load-item .num {
-            font-family: var(--font-mono);
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text-main);
-        }
-
-        .load-item .time {
-            font-size: 0.65rem;
-            color: var(--text-sub);
-            margin-top: 2px;
-        }
-
-        .load-divider {
-            width: 1px;
-            height: 16px;
-            background: var(--border-color);
-        }
-
-        .stat-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            height: 100%;
-            justify-content: center;
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-        }
-
-        .stat-row .label-mini {
-            font-size: 0.65rem;
-            color: var(--text-sub);
-            text-transform: uppercase;
-        }
-
-        .stat-row .val-mini {
-            font-family: var(--font-mono);
-            font-size: 0.85rem;
-            color: var(--text-main);
-            font-weight: 600;
-        }
-
         .micro-bar-bg {
             width: 100%;
             height: 4px;
@@ -575,6 +529,275 @@
             transition: width 0.3s ease;
         }
 
+        /* ============================================
+         * 优化后的 SSE 状态指示器样式
+         * ============================================ */
+        .sse-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 状态背景光晕效果 */
+        .sse-status::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Live 状态 - 绿色主题 */
+        .sse-status.live {
+            color: var(--success-color);
+            background: linear-gradient(135deg,
+                    rgba(var(--success-color-rgb), 0.12),
+                    rgba(var(--success-color-rgb), 0.06));
+            border: 1px solid rgba(var(--success-color-rgb), 0.25);
+            box-shadow:
+                0 2px 8px rgba(var(--success-color-rgb), 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .sse-status.live::before {
+            background: radial-gradient(circle at 30% 50%,
+                    rgba(var(--success-color-rgb), 0.15),
+                    transparent 60%);
+            opacity: 1;
+        }
+
+        /* Reconnecting 状态 - 橙色主题 */
+        .sse-status.reconnecting {
+            color: var(--warning-color);
+            background: linear-gradient(135deg,
+                    rgba(var(--warning-color-rgb), 0.12),
+                    rgba(var(--warning-color-rgb), 0.06));
+            border: 1px solid rgba(var(--warning-color-rgb), 0.25);
+            box-shadow:
+                0 2px 8px rgba(var(--warning-color-rgb), 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        /* Paused 状态 - 灰色主题 */
+        .sse-status.paused {
+            color: var(--text-sub);
+            background: linear-gradient(135deg,
+                    rgba(127, 140, 141, 0.1),
+                    rgba(127, 140, 141, 0.05));
+            border: 1px solid rgba(127, 140, 141, 0.2);
+            box-shadow:
+                0 2px 8px rgba(0, 0, 0, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        /* Connecting 状态 - 蓝色主题 */
+        .sse-status.connecting {
+            color: #3498DB;
+            background: linear-gradient(135deg,
+                    rgba(52, 152, 219, 0.12),
+                    rgba(52, 152, 219, 0.06));
+            border: 1px solid rgba(52, 152, 219, 0.25);
+            box-shadow:
+                0 2px 8px rgba(52, 152, 219, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        /* 状态图标容器 */
+        .sse-status-icon {
+            position: relative;
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Live 状态 - 脉冲动画点 */
+        .sse-status.live .sse-status-icon::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--success-color);
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .sse-status.live .sse-status-icon::after {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--success-color);
+            border-radius: 50%;
+            position: absolute;
+            animation: live-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes live-pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+
+            50% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+
+        /* Reconnecting 状态 - 旋转加载动画 */
+        .sse-status.reconnecting .sse-status-icon::before {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(var(--warning-color-rgb), 0.2);
+            border-top-color: var(--warning-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Paused 状态 - 暂停图标 */
+        .sse-status.paused .sse-status-icon::before,
+        .sse-status.paused .sse-status-icon::after {
+            content: '';
+            width: 3px;
+            height: 10px;
+            background: var(--text-sub);
+            border-radius: 1px;
+            position: absolute;
+        }
+
+        .sse-status.paused .sse-status-icon::before {
+            left: 2px;
+        }
+
+        .sse-status.paused .sse-status-icon::after {
+            right: 2px;
+        }
+
+        /* Connecting 状态 - 波浪动画 */
+        .sse-status.connecting .sse-status-icon {
+            gap: 2px;
+        }
+
+        .sse-status.connecting .sse-status-icon::before {
+            content: '';
+            display: flex;
+            gap: 2px;
+        }
+
+        .sse-status.connecting .wave-bar {
+            width: 3px;
+            height: 8px;
+            background: #3498DB;
+            border-radius: 1px;
+            animation: wave 1s ease-in-out infinite;
+        }
+
+        .sse-status.connecting .wave-bar:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .sse-status.connecting .wave-bar:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .sse-status.connecting .wave-bar:nth-child(3) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes wave {
+
+            0%,
+            100% {
+                transform: scaleY(0.5);
+            }
+
+            50% {
+                transform: scaleY(1.2);
+            }
+        }
+
+        /* 状态文字 */
+        .sse-status-text {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 数据流指示器 - 可选 */
+        .sse-status.live .data-flow {
+            position: absolute;
+            right: 10px;
+            display: flex;
+            gap: 2px;
+            opacity: 0.6;
+        }
+
+        .sse-status.live .data-flow span {
+            width: 2px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 1px;
+            animation: data-flow 0.6s ease-in-out infinite;
+        }
+
+        .sse-status.live .data-flow span:nth-child(1) {
+            animation-delay: 0s;
+            height: 6px;
+        }
+
+        .sse-status.live .data-flow span:nth-child(2) {
+            animation-delay: 0.15s;
+            height: 10px;
+        }
+
+        .sse-status.live .data-flow span:nth-child(3) {
+            animation-delay: 0.3s;
+            height: 4px;
+        }
+
+        @keyframes data-flow {
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        /* Hover 效果 */
+        .sse-status:hover {
+            transform: translateY(-1px);
+        }
+
+        .sse-status.live:hover {
+            box-shadow:
+                0 4px 12px rgba(var(--success-color-rgb), 0.25),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        /* ============================================ */
+
         .skeleton {
             display: inline-block;
             height: 1em;
@@ -589,6 +812,7 @@
             0% {
                 background-position: 200% 0;
             }
+
             100% {
                 background-position: -200% 0;
             }
@@ -639,8 +863,81 @@
             font-size: 1rem;
         }
 
-        /* 移动端优化 */
-        @media (max-width: 600px) {
+        @media (max-width: 1199px) and (min-width: 769px) {
+            .wide-layout {
+                display: block;
+            }
+
+            .card {
+                max-width: 900px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+                align-items: flex-start;
+                padding-top: 20px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .wide-layout {
+                display: block;
+            }
+
+            .card {
+                padding: 20px;
+                border-radius: 8px;
+            }
+
+            h1 {
+                font-size: 1.4rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .quote-section {
+                margin: 20px 0 28px 0;
+                padding-left: 12px;
+            }
+
+            .quote-main {
+                font-size: 1rem;
+            }
+
+            .quote-sub {
+                font-size: 0.8rem;
+            }
+
+            .panel {
+                padding: 16px 18px;
+                margin-top: 6px;
+            }
+
+            .panel-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                margin-bottom: 16px;
+                padding-bottom: 10px;
+            }
+
+            .panel-grid {
+                grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
             .chart-wrapper {
                 height: 160px !important;
             }
@@ -652,21 +949,8 @@
                 padding-top: 14px;
             }
 
-            .current-stat {
-                gap: 6px;
-            }
-
             .current-stat .stat-value {
                 font-size: 1.1rem;
-            }
-
-            .service-tag {
-                font-size: 0.65rem;
-                padding: 2px 6px;
-            }
-
-            .refresh-indicator {
-                font-size: 0.6rem;
             }
 
             footer {
@@ -682,638 +966,455 @@
                 flex-wrap: wrap;
             }
 
-            .tech-pill {
-                font-size: 0.7rem;
-                padding: 3px 8px;
-            }
-
-            .tech-pill iconify-icon {
-                font-size: 0.9rem;
-            }
-
-            .load-display {
-                flex-direction: column;
-                gap: 8px;
-            }
-
-            .load-item {
-                text-align: left;
-            }
-
-            .load-divider {
-                display: none;
-            }
-        }
-
-        /* 自动刷新指示器 */
-        .refresh-indicator {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.65rem;
-            color: var(--text-sub);
-        }
-
-        .refresh-indicator .spinner {
-            width: 10px;
-            height: 10px;
-            border: 1.5px solid var(--border-color);
-            border-radius: 50%;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        .refresh-indicator .spinner.connected {
-            opacity: 1;
-            border-color: var(--success-color);
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        .refresh-indicator .spinner.reconnecting {
-            opacity: 1;
-            border: 1.5px solid var(--border-color);
-            border-top-color: var(--accent-color);
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
+            /* 移动端 SSE 状态适配 */
+            .sse-status {
+                padding: 5px 10px;
+                font-size: 0.65rem;
             }
         }
     </style>
 </head>
 
 <body>
-    <main class="card">
-        <div class="card-top-accent"></div>
+    <script id="server-data" type="application/json">
+    {
+        "version": "{{ version }}",
+        "serverTime": "{{ server_time }}",
+        "clientIp": "{{ client_ip }}",
+        "clientLocation": "{{ client_location }}",
+        "clientProtocol": "{{ client_protocol }}",
+        "mongoStatus": "{{ mongo_status }}",
+        "sysOs": "{{ sys_os }}",
+        "sysArch": "{{ sys_arch }}",
+        "sysKernel": "{{ sys_kernel }}",
+        "sysUptime": "{{ sys_uptime }}",
+        "rawUa": "{{ raw_ua }}",
+        "cpuHistory": {{ cpu_history_json | safe }},
+        "memHistory": {{ mem_history_json | safe }},
+        "systemMemoryHistory": {{ system_memory_history_json | safe }},
+        "timestamps": {{ timestamps_json | safe }}
+    }
+    </script>
 
-        <header>
-            <div class="header-top">
-                <div>
-                    <h1>
-                        TNXG Space Station
-                        <span class="version-tag">{{ version }}</span>
-                    </h1>
-                    <div class="subtitle">API Gateway Interface</div>
-                </div>
-                <div class="status-badge online">
-                    <div class="dot"></div>
-                    ONLINE
-                </div>
-            </div>
-        </header>
+    {% raw %}
+    <div id="app" v-cloak>
+        <main class="card">
+            <div class="card-top-accent"></div>
 
-        <div class="quote-section">
-            <div class="quote-main">迷子でもいい、迷子でも進め。</div>
-            <div class="quote-sub">即使迷茫也无妨，迷茫着也要砥砺前行。</div>
-        </div>
-
-        <div class="grid">
-            <!-- Connection Overview Panel -->
-            <div class="panel" style="grid-column: 1 / -1;">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <iconify-icon icon="mingcute:wifi-line"></iconify-icon>
-                        Connection Overview
+            <header>
+                <div class="header-top">
+                    <div>
+                        <h1>
+                            TNXG Space Station
+                            <span class="version-tag">{{ server.version }}</span>
+                        </h1>
+                        <div class="subtitle">API Gateway Interface</div>
+                    </div>
+                    <div :class="['status-badge', sseConnected ? 'online' : 'offline']">
+                        <div class="status-indicator"></div>
+                        {{ sseConnected ? 'LIVE' : 'OFFLINE' }}
                     </div>
                 </div>
+            </header>
 
-                <div class="panel-grid">
-                    <!-- 1. Server Time -->
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Server Time</div>
-                        <div class="value" style="font-size: 0.85rem;">{{ server_time }}</div>
-                    </div>
-
-                    <!-- 2. Client IP -->
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Client IP Address</div>
-                        <div class="value" style="font-size: 0.85rem;">{{ client_ip }}</div>
-                    </div>
-
-                    <!-- 3. Location -->
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Region Info</div>
-                         <div class="value" style="font-size: 0.85rem;">
-                            {% if client_location == "Unknown Region" %}
-                            Direct Connection
-                            {% else %}
-                            {{ client_location }}
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <!-- 4. Protocol -->
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Protocol</div>
-                        <div class="value" style="font-size: 0.85rem;">{{ client_protocol }}</div>
-                    </div>
-                </div>
+            <div class="quote-section">
+                <div class="quote-main">迷子でもいい、迷子でも進め。</div>
+                <div class="quote-sub">即使迷茫也无妨，迷茫着也要砥砺前行。</div>
             </div>
 
-            <!-- Unified System Monitor Panel -->
-            <div class="panel accent" style="grid-column: 1 / -1;">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <iconify-icon icon="mingcute:server-line"></iconify-icon>
-                        System Monitor
-                    </div>
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <div class="refresh-indicator">
-                            <div class="spinner" id="refresh-spinner"></div>
-                            <span id="refresh-text">Live</span>
+            <div class="grid">
+                <div class="wide-layout">
+                    <!-- Connection Overview Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <iconify-icon icon="mingcute:wifi-line"></iconify-icon>
+                                Connection Overview
+                            </div>
                         </div>
-                        <div class="service-tag {% if mongo_status == 'Connected' %}connected{% else %}disconnected{% endif %}">
-                            <span class="indicator"></span>
-                            MongoDB {{ mongo_status }}
+
+                        <div class="panel-grid">
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Server Time</div>
+                                <div class="value" style="font-size: 0.85rem;">{{ server.serverTime }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Client IP Address</div>
+                                <div class="value" style="font-size: 0.85rem;">{{ server.clientIp }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Region Info</div>
+                                <div class="value" style="font-size: 0.85rem;">{{ displayLocation }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Protocol</div>
+                                <div class="value" style="font-size: 0.85rem;">{{ server.clientProtocol }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Client Panel -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <iconify-icon icon="mingcute:computer-line"></iconify-icon>
+                                Client Environment
+                            </div>
+                        </div>
+
+                        <div class="panel-grid">
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Browser Engine</div>
+                                <div class="value" style="font-size: 0.85rem;">
+                                    <span v-if="!ua.browser" class="skeleton" style="width: 120px;"></span>
+                                    <span v-else>{{ ua.browser }}</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Operating System</div>
+                                <div class="value" style="font-size: 0.85rem;">
+                                    <span v-if="!ua.os" class="skeleton" style="width: 100px;"></span>
+                                    <span v-else>{{ ua.os }}</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Device Model</div>
+                                <div class="value" style="font-size: 0.85rem;">
+                                    <span v-if="!ua.device" class="skeleton" style="width: 80px;"></span>
+                                    <span v-else>{{ ua.device }}</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="label" style="font-size: 0.7rem;">Architecture</div>
+                                <div class="value" style="font-size: 0.85rem;">
+                                    <span v-if="!ua.cpu" class="skeleton" style="width: 60px;"></span>
+                                    <span v-else>{{ ua.cpu }}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Top Info Grid: System Details -->
-                <div class="panel-grid" style="margin-bottom: 16px;">
-                    <!-- 1. System -->
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">System</div>
-                        <div class="value" style="font-size: 0.85rem;" title="{{ sys_kernel }}">
-                            {{ sys_os }}
+                <!-- Unified System Monitor Panel -->
+                <div class="panel accent" style="grid-column: 1 / -1;">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <iconify-icon icon="mingcute:server-line"></iconify-icon>
+                            System Monitor
                         </div>
-                        <div style="font-size: 0.65rem; color: var(--text-sub); margin-top:2px;">{{ sys_arch }}</div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <!-- 优化后的 SSE 状态指示器 -->
+                            <div :class="['sse-status', sseStatusClass]">
+                                <div class="sse-status-icon">
+                                    <!-- Connecting 状态的波浪条 -->
+                                    <template v-if="sseStatusClass === 'connecting'">
+                                        <div class="wave-bar"></div>
+                                        <div class="wave-bar"></div>
+                                        <div class="wave-bar"></div>
+                                    </template>
+                                </div>
+                                <span class="sse-status-text">{{ sseStatusText }}</span>
+                                <!-- Live 状态的数据流指示器 -->
+                                <div v-if="sseStatusClass === 'live'" class="data-flow">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+
+                            <div :class="['service-tag', mongoConnected ? 'connected' : 'disconnected']">
+                                <span class="indicator"></span>
+                                MongoDB {{ server.mongoStatus }}
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- 2. Uptime -->
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Uptime</div>
-                        <div class="value" style="font-size: 0.85rem;">
-                            {{ sys_uptime }}
-                        </div>
-                        <div style="font-size: 0.65rem; color: var(--text-sub); margin-top:2px;">Since Boot</div>
-                    </div>
-                </div>
-
-                <!-- Resource Chart Section -->
-                <div class="chart-section">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center;">
-                        <span class="label" style="font-size: 0.7rem; display: flex; align-items: center; gap: 6px;">
-                            <iconify-icon icon="mingcute:chart-line-line"></iconify-icon>
-                            Real-time Usage
-                        </span>
-                        <div class="chart-legend">
-                            <div class="legend-item">
-                                <div class="legend-color cpu"></div>
-                                CPU
+                    <!-- Top Info Grid -->
+                    <div class="panel-grid" style="margin-bottom: 16px;">
+                        <div class="info-item">
+                            <div class="label" style="font-size: 0.7rem;">System</div>
+                            <div class="value" style="font-size: 0.85rem;" :title="server.sysKernel">
+                                {{ server.sysOs }}
                             </div>
-                            <div class="legend-item">
-                                <div class="legend-color mem"></div>
-                                Memory
-                            </div>
+                            <div style="font-size: 0.65rem; color: var(--text-sub); margin-top:2px;">{{ server.sysArch
+                                }}</div>
                         </div>
-                    </div>
-                    
-                    <div class="chart-wrapper" style="height: 200px;">
-                        <canvas id="resourceChart"></canvas>
+                        <div class="info-item">
+                            <div class="label" style="font-size: 0.7rem;">Uptime</div>
+                            <div class="value" style="font-size: 0.85rem;">
+                                {{ server.sysUptime }}
+                            </div>
+                            <div style="font-size: 0.65rem; color: var(--text-sub); margin-top:2px;">Since Boot</div>
+                        </div>
                     </div>
 
-                    <!-- Current Stats -->
-                    <div class="current-stats" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                        <!-- CPU -->
-                        <div class="current-stat">
-                            <div class="stat-label">CPU Usage</div>
-                            <div class="stat-value cpu" id="current-cpu">
-                                {{ proc_cpu }}<span class="stat-unit">%</span>
+                    <!-- Chart Section -->
+                    <div class="chart-section">
+                        <div
+                            style="display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center;">
+                            <span class="label"
+                                style="font-size: 0.7rem; display: flex; align-items: center; gap: 6px;">
+                                <iconify-icon icon="mingcute:chart-line-line"></iconify-icon>
+                                Real-time Usage
+                            </span>
+                            <div class="chart-legend">
+                                <div class="legend-item">
+                                    <div class="legend-color cpu"></div>CPU
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color mem"></div>RSS Mem
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color sys-mem"></div>System Mem
+                                </div>
                             </div>
                         </div>
-                        
-                        <!-- Memory -->
-                        <div class="current-stat" style="flex: 2;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 4px;">
-                                <div class="stat-label">Memory Allocation</div>
-                                <div class="stat-value mem" id="current-mem" style="font-size: 1rem;">{{ proc_mem_rss }}</div>
+
+                        <div class="chart-wrapper" style="height: 200px;">
+                            <canvas ref="mainChart"></canvas>
+                        </div>
+
+                        <div class="current-stats">
+                            <div class="current-stat">
+                                <div class="stat-label">CPU Usage</div>
+                                <div class="stat-value cpu">
+                                    {{ (realtime.cpu * 100).toFixed(1) }}<span class="stat-unit">%</span>
+                                </div>
                             </div>
-                            <div class="micro-bar-bg" title="Usage: {{ proc_mem_percent }}%" style="height: 8px; margin: 8px 0;">
-                                <div class="micro-bar-fill" id="mem-bar" style="width: {{ proc_mem_percent }}%;"></div>
+
+                            <div class="current-stat">
+                                <div class="stat-label">Physical RSS</div>
+                                <div class="stat-value mem" style="font-size: 1rem;">
+                                    {{ realtime.mem_rss_mb.toFixed(1) }} <span class="stat-unit">MB</span>
+                                </div>
+                                <div class="micro-bar-bg" style="background: rgba(0,0,0,0.05);">
+                                    <div class="micro-bar-fill" style="background: var(--chart-mem-color); width: 20%;">
+                                    </div>
+                                </div>
+                                <div class="stat-label" style="font-size: 0.65rem; margin-top: 4px;">Virtual: {{
+                                    formatLargeMem(realtime.mem_virtual_mb) }}</div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div class="stat-label" id="mem-percent">{{ proc_mem_percent }}% of Sys Total ({{ sys_mem_total }})</div>
-                                <div class="stat-label">Virtual: <span id="current-virtual" style="font-family: var(--font-mono); color: var(--text-main);">{{ proc_mem_virtual }}</span></div>
+
+                            <div class="current-stat" style="flex: 1.5;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                                    <div class="stat-label">App Heap</div>
+                                    <div class="stat-value" style="font-size: 1rem; color: var(--chart-heap-color);">
+                                        {{ monitor.current_memory_mb }} <span class="stat-unit">MB</span>
+                                    </div>
+                                </div>
+                                <div class="micro-bar-bg" title="Heap Usage">
+                                    <div class="micro-bar-fill"
+                                        :style="{ width: Math.min(monitor.memory_usage_percentage, 100) + '%', background: 'var(--chart-heap-color)' }">
+                                    </div>
+                                </div>
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                                    <div class="stat-label">Used: {{ monitor.memory_usage_percentage.toFixed(1) }}%
+                                    </div>
+                                    <div class="stat-label">Limit: {{ monitor.threshold_mb }} MB</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 面板 2: 客户端环境分析 -->
-            <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <iconify-icon icon="mingcute:computer-line"></iconify-icon>
-                        Client Environment
-                    </div>
-                </div>
-
-                <div class="panel-grid">
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Browser Engine</div>
-                        <div class="value" style="font-size: 0.85rem;" id="ua-browser">
-                            <span class="skeleton" style="width: 120px;"></span>
-                        </div>
-                    </div>
-
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Operating System</div>
-                        <div class="value" style="font-size: 0.85rem;" id="ua-os">
-                            <span class="skeleton" style="width: 100px;"></span>
-                        </div>
-                    </div>
-
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Device Model</div>
-                        <div class="value" style="font-size: 0.85rem;" id="ua-device">
-                            <span class="skeleton" style="width: 80px;"></span>
-                        </div>
-                    </div>
-
-                    <div class="info-item">
-                        <div class="label" style="font-size: 0.7rem;">Architecture</div>
-                        <div class="value" style="font-size: 0.85rem;" id="ua-cpu">
-                            <span class="skeleton" style="width: 60px;"></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <footer>
-            <div class="copyright">&copy; 2025 天翔TNXG</div>
-            <div class="tech-badges">
-                <div class="tech-pill">
-                    <iconify-icon icon="simple-icons:rust" style="color: var(--text-main);"></iconify-icon>
-                    RUST
-                </div>
-                <div class="tech-pill">
-                    <iconify-icon icon="simple-icons:rocket" style="color: var(--accent-color);"></iconify-icon>
-                    ROCKET.RS
-                </div>
-                <a href="https://github.com/TNXG/space-api" target="_blank" style="text-decoration: none;">
+            <footer>
+                <div class="copyright">&copy; 2025 天翔TNXG</div>
+                <div class="tech-badges">
                     <div class="tech-pill">
-                        <iconify-icon icon="mingcute:github-line"></iconify-icon>
-                        OPEN SOURCE
+                        <iconify-icon icon="simple-icons:rust" style="color: var(--text-main);"></iconify-icon>
+                        RUST
                     </div>
-                </a>
-            </div>
-        </footer>
-    </main>
-
-    <!-- 隐藏数据 -->
-    <div id="raw-ua" style="display:none;">{{ raw_ua }}</div>
-    <div id="cpu-history-data" style="display:none;">{{ cpu_history_json | safe }}</div>
-    <div id="mem-history-data" style="display:none;">{{ mem_history_json | safe }}</div>
-    <div id="timestamps-data" style="display:none;">{{ timestamps_json | safe }}</div>
+                    <div class="tech-pill">
+                        <iconify-icon icon="simple-icons:rocket" style="color: var(--accent-color);"></iconify-icon>
+                        ROCKET.RS
+                    </div>
+                    <a href="https://github.com/TNXG/space-api" target="_blank" style="text-decoration: none;">
+                        <div class="tech-pill">
+                            <iconify-icon icon="mingcute:github-line"></iconify-icon>
+                            OPEN SOURCE
+                        </div>
+                    </a>
+                </div>
+            </footer>
+        </main>
+    </div>
+    {% endraw %}
 
     <script>
-    // ========================================
-    // 图表初始化与实时更新
-    // ========================================
-    
-    // 获取初始数据
-    let cpuHistory = JSON.parse(document.getElementById('cpu-history-data').textContent || '[]');
-    let memHistory = JSON.parse(document.getElementById('mem-history-data').textContent || '[]');
-    let timestamps = JSON.parse(document.getElementById('timestamps-data').textContent || '[]');
+        const { createApp, ref, reactive, computed, onMounted, onUnmounted } = Vue;
 
-    // 检测深色模式
-    const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    // 图表颜色配置
-    const chartColors = {
-        cpu: '#E74C3C',
-        cpuBg: 'rgba(231, 76, 60, 0.1)',
-        mem: isDarkMode ? '#5DADE2' : '#3498DB',
-        memBg: isDarkMode ? 'rgba(93, 173, 226, 0.1)' : 'rgba(52, 152, 219, 0.1)',
-        grid: isDarkMode ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
-        text: isDarkMode ? '#95A5A6' : '#7F8C8D'
-    };
+        createApp({
+            setup() {
+                const server = JSON.parse(document.getElementById('server-data').textContent);
 
-    // Chart.js 配置
-    const ctx = document.getElementById('resourceChart').getContext('2d');
-    
-    const resourceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: timestamps,
-            datasets: [
-                {
-                    label: 'CPU %',
-                    data: cpuHistory,
-                    borderColor: chartColors.cpu,
-                    backgroundColor: chartColors.cpuBg,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    pointHoverBackgroundColor: chartColors.cpu,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Memory (MiB)',
-                    data: memHistory,
-                    borderColor: chartColors.mem,
-                    backgroundColor: chartColors.memBg,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    pointHoverBackgroundColor: chartColors.mem,
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                    titleColor: isDarkMode ? '#ECF0F1' : '#2C3E50',
-                    bodyColor: isDarkMode ? '#BDC3C7' : '#7F8C8D',
-                    borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-                    borderWidth: 1,
-                    padding: 12,
-                    displayColors: true,
-                    callbacks: {
-                        label: function(context) {
-                            if (context.datasetIndex === 0) {
-                                return `CPU: ${context.parsed.y.toFixed(2)}%`;
-                            } else {
-                                return `Memory: ${context.parsed.y.toFixed(2)} MiB`;
+                const realtime = reactive({ cpu: 0, mem_rss_mb: 0, mem_virtual_mb: 0 });
+                const monitor = reactive({ current_memory_mb: 0, threshold_mb: 500, memory_usage_percentage: 0, memory_pressure: 'low' });
+                const sseConnected = ref(false);
+                const sseStatusText = ref('Connecting');
+                const sseStatusClass = ref('connecting'); // 新增：状态 class
+                const mainChart = ref(null);
+                const ua = reactive({ browser: '', os: '', device: '', cpu: '' });
+
+                let chartInstance = null;
+                let eventSource = null;
+
+                const mongoConnected = computed(() => server.mongoStatus === 'Connected');
+                const displayLocation = computed(() => server.clientLocation === "Unknown Region" ? "Direct Connection" : server.clientLocation);
+
+                const formatLargeMem = (mb) => {
+                    if (mb > 1024) return (mb / 1024).toFixed(1) + ' GB';
+                    return mb.toFixed(0) + ' MB';
+                };
+
+                // 更新 SSE 状态的辅助函数
+                const updateSseStatus = (status) => {
+                    switch (status) {
+                        case 'live':
+                            sseConnected.value = true;
+                            sseStatusText.value = 'Live';
+                            sseStatusClass.value = 'live';
+                            break;
+                        case 'reconnecting':
+                            sseConnected.value = false;
+                            sseStatusText.value = 'Reconnecting';
+                            sseStatusClass.value = 'reconnecting';
+                            break;
+                        case 'paused':
+                            sseConnected.value = false;
+                            sseStatusText.value = 'Paused';
+                            sseStatusClass.value = 'paused';
+                            break;
+                        case 'connecting':
+                        default:
+                            sseConnected.value = false;
+                            sseStatusText.value = 'Connecting';
+                            sseStatusClass.value = 'connecting';
+                            break;
+                    }
+                };
+
+                const parseUA = async () => {
+                    const p = new UAParser(server.rawUa);
+                    const r = p.getResult();
+                    ua.browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
+                    ua.os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
+                    ua.device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
+                    ua.cpu = r.cpu.architecture || 'Unknown Arch';
+
+                    if (navigator.userAgentData) {
+                        try {
+                            const h = await navigator.userAgentData.getHighEntropyValues(["architecture", "model", "platformVersion", "fullVersionList"]);
+                            if (h.architecture) ua.cpu = h.architecture;
+                            if (h.model) ua.device = h.model;
+                            if (h.platform === 'Windows') {
+                                ua.os = parseInt(h.platformVersion.split('.')[0]) >= 13 ? 'Windows 11' : 'Windows 10';
                             }
-                        }
+                        } catch { }
                     }
-                }
-            },
-            scales: {
-                x: {
-                    display: true,
-                    grid: {
-                        color: chartColors.grid,
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: chartColors.text,
-                        font: {
-                            size: 10,
-                            family: "'JetBrains Mono', monospace"
+                };
+
+                const initChart = () => {
+                    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    const ctx = mainChart.value.getContext('2d');
+
+                    const colors = {
+                        cpu: '#E74C3C', cpuBg: 'rgba(231, 76, 60, 0.1)',
+                        mem: isDark ? '#5DADE2' : '#3498DB', memBg: isDark ? 'rgba(93, 173, 226, 0.1)' : 'rgba(52, 152, 219, 0.1)',
+                        sysMem: isDark ? '#F1C40F' : '#F39C12', sysMemBg: isDark ? 'rgba(241, 196, 15, 0.1)' : 'rgba(243, 156, 18, 0.1)',
+                        grid: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+                        text: isDark ? '#95A5A6' : '#7F8C8D'
+                    };
+
+                    // 使用服务器提供的初始历史数据
+                    const initialLabels = server.timestamps || [];
+                    const initialCpuData = (server.cpuHistory || []).map(v => v > 1 ? v : v * 100);
+                    const initialMemData = server.memHistory || [];
+                    const initialSysMemData = server.systemMemoryHistory || [];
+
+                    chartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: initialLabels, datasets: [
+                                { label: 'CPU %', data: initialCpuData, borderColor: colors.cpu, backgroundColor: colors.cpuBg, fill: true, borderWidth: 2, tension: 0.4, pointRadius: 0, yAxisID: 'y' },
+                                { label: 'RSS (MB)', data: initialMemData, borderColor: colors.mem, backgroundColor: colors.memBg, fill: true, borderWidth: 2, tension: 0.4, pointRadius: 0, yAxisID: 'y1' },
+                                { label: 'System Memory (MB)', data: initialSysMemData, borderColor: colors.sysMem, backgroundColor: colors.sysMemBg, fill: false, borderWidth: 2, tension: 0.4, pointRadius: 0, yAxisID: 'y1' }
+                            ]
                         },
-                        maxRotation: 0,
-                        maxTicksLimit: 6
-                    }
-                },
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: 'CPU %',
-                        color: chartColors.cpu,
-                        font: {
-                            size: 10,
-                            weight: '600'
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: colors.grid, drawBorder: false }, ticks: { display: false } },
+                                y: { position: 'left', min: 0, suggestedMax: 10, grid: { color: colors.grid, drawBorder: false }, ticks: { color: colors.text, font: { size: 10 }, callback: v => v + '%' } },
+                                y1: { position: 'right', min: 0, grid: { drawOnChartArea: false }, ticks: { color: colors.text, font: { size: 10 } } }
+                            },
+                            animation: { duration: 0 }
                         }
-                    },
-                    grid: {
-                        color: chartColors.grid,
-                        drawBorder: false
-                    },
-                    ticks: {
-                        color: chartColors.text,
-                        font: {
-                            size: 10,
-                            family: "'JetBrains Mono', monospace"
-                        },
-                        callback: function(value) {
-                            return value + '%';
+                    });
+                };
+
+                const connectSSE = () => {
+                    if (eventSource) eventSource.close();
+
+                    updateSseStatus('connecting');
+                    eventSource = new EventSource('/api/metrics/stream');
+
+                    eventSource.onopen = () => {
+                        updateSseStatus('live');
+                    };
+
+                    eventSource.onmessage = (e) => {
+                        try {
+                            const d = JSON.parse(e.data);
+                            realtime.cpu = d.cpu;
+                            realtime.mem_rss_mb = d.mem_rss_mb;
+                            realtime.mem_virtual_mb = d.mem_virtual_mb;
+                            if (d.memory_monitor) Object.assign(monitor, d.memory_monitor);
+
+                            if (chartInstance) {
+                                chartInstance.data.labels = d.timestamps || [];
+                                chartInstance.data.datasets[0].data = (d.cpu_history || []).map(v => v > 1 ? v : v * 100);
+                                chartInstance.data.datasets[1].data = d.mem_history || [];
+                                chartInstance.data.datasets[2].data = d.system_memory_history || [];
+                                chartInstance.update('none');
+                            }
+                        } catch (err) { console.error(err); }
+                    };
+
+                    eventSource.onerror = () => {
+                        updateSseStatus('reconnecting');
+                    };
+                };
+
+                onMounted(() => {
+                    initChart();
+                    connectSSE();
+                    parseUA();
+
+                    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                        if (chartInstance) { chartInstance.destroy(); initChart(); }
+                    });
+
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            if (eventSource) { eventSource.close(); eventSource = null; }
+                            updateSseStatus('paused');
+                        } else {
+                            connectSSE();
                         }
-                    },
-                    min: 0,
-                    suggestedMax: 10
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Memory (MiB)',
-                        color: chartColors.mem,
-                        font: {
-                            size: 10,
-                            weight: '600'
-                        }
-                    },
-                    grid: {
-                        drawOnChartArea: false
-                    },
-                    ticks: {
-                        color: chartColors.text,
-                        font: {
-                            size: 10,
-                            family: "'JetBrains Mono', monospace"
-                        },
-                        callback: function(value) {
-                            return value.toFixed(1);
-                        }
-                    },
-                    min: 0
-                }
-            },
-            animation: {
-                duration: 300
+                    });
+                });
+
+                return {
+                    server, realtime, monitor, sseConnected, sseStatusText, sseStatusClass,
+                    mongoConnected, displayLocation, mainChart, ua, formatLargeMem
+                };
             }
-        }
-    });
+        }).mount('#app');
+    </script>
+</body>
 
-    // ========================================
-    // 实时数据更新 (SSE)
-    // ========================================
-    
-    // UI更新函数
-    function updateMetrics(data) {
-        // 更新图表数据
-        cpuHistory = data.cpu_history;
-        memHistory = data.mem_history;
-        timestamps = data.timestamps;
-        
-        resourceChart.data.labels = timestamps;
-        resourceChart.data.datasets[0].data = cpuHistory;
-        resourceChart.data.datasets[1].data = memHistory;
-        resourceChart.update('none');
-        
-        // 更新当前值显示
-        document.getElementById('current-cpu').innerHTML = 
-            `${data.cpu.toFixed(1)}<span class="stat-unit">%</span>`;
-        document.getElementById('current-mem').textContent = 
-            formatBytes(data.mem_rss);
-        
-        // 更新内存百分比条
-        const totalMem = parseFloat(document.querySelector('[title^="Usage:"]')?.title.match(/[\d.]+/) || 0);
-        if (totalMem > 0 || true) {
-             const memPercent = (data.mem_rss / (parseFloat('{{ sys_mem_total }}'.replace(/[^\d.]/g, '')) * getMultiplier('{{ sys_mem_total }}')) * 100).toFixed(2);
-             document.getElementById('mem-percent').textContent = memPercent + '%';
-             document.getElementById('mem-bar').style.width = memPercent + '%';
-        }
-    }
-
-    const refreshText = document.getElementById('refresh-text');
-    const spinner = document.getElementById('refresh-spinner');
-
-    let evtSource;
-
-    function initSSE() {
-        if (evtSource) {
-            evtSource.close();
-        }
-
-        evtSource = new EventSource("/api/metrics/stream");
-        
-        evtSource.onmessage = (event) => {
-             const data = JSON.parse(event.data);
-             updateMetrics(data);
-             
-             refreshText.textContent = 'Live';
-             spinner.className = 'spinner connected';
-        };
-
-        evtSource.onerror = (err) => {
-            console.error("EventSource failed:", err);
-            refreshText.textContent = 'Reconnecting...';
-            spinner.className = 'spinner reconnecting';
-        };
-
-        evtSource.onopen = () => {
-             refreshText.textContent = 'Live';
-             spinner.className = 'spinner connected';
-        };
-    }
-
-    // 初始化 SSE
-    initSSE();
-
-    // 页面可见性变化时逻辑 (Optional: close stream when hidden to save server resources?)
-    // User didn't request this optimization but it's good practice.
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            if (evtSource) {
-                evtSource.close();
-                evtSource = null;
-                refreshText.textContent = 'Paused';
-                spinner.className = 'spinner';
-            }
-        } else {
-            initSSE();
-        }
-    });
-
-    // ========================================
-    // UA 解析 (原有逻辑)
-    // ========================================
-    
-    document.addEventListener('DOMContentLoaded', async () => {
-        const rawUA = document.getElementById('raw-ua').textContent;
-
-        const parser = new UAParser(rawUA);
-        const r = parser.getResult();
-
-        let browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
-        let os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
-        let device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
-        let cpu = r.cpu.architecture || 'Unknown Arch';
-
-        if (navigator.userAgentData) {
-            try {
-                const hints = await navigator.userAgentData.getHighEntropyValues([
-                    "architecture", "bitness", "model", "platformVersion", "fullVersionList"
-                ]);
-
-                if (hints.architecture) {
-                    cpu = `${hints.architecture} ${hints.bitness ? '(' + hints.bitness + 'bit)' : ''}`;
-                }
-                if (hints.model) {
-                    device = hints.model;
-                }
-
-                if (hints.platform === 'Windows') {
-                    const majorVer = parseInt(hints.platformVersion.split('.')[0]);
-                    os = majorVer >= 13 ? 'Windows 11' : 'Windows 10';
-                } else if (hints.platform) {
-                    os = `${hints.platform} ${hints.platformVersion || ''}`;
-                }
-
-                const brand = hints.brands?.find(b => !["Not A(Brand", "Chromium"].includes(b.brand));
-                if (brand) {
-                    browser = `${brand.brand} ${brand.version}`;
-                }
-
-            } catch (e) {
-                console.log("Client Hints Error:", e);
-            }
-        }
-
-        const setText = (id, text) => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.innerHTML = text;
-                el.style.color = "var(--text-main)";
-            }
-        };
-
-        setTimeout(() => {
-            setText('ua-browser', browser);
-            setText('ua-os', os);
-            setText('ua-device', device);
-            setText('ua-cpu', cpu);
-        }, 300);
-    });
-
-    // ========================================
-    // 深色模式切换监听
-    // ========================================
-    
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        const isDark = e.matches;
-        
-        // 更新图表颜色
-        const newColors = {
-            mem: isDark ? '#5DADE2' : '#3498DB',
-            memBg: isDark ? 'rgba(93, 173, 226, 0.1)' : 'rgba(52, 152, 219, 0.1)',
-            grid: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
-            text: isDark ? '#95A5A6' : '#7F8C8D'
-        };
-
-        resourceChart.data.datasets[1].borderColor = newColors.mem;
-        resourceChart.data.datasets[1].backgroundColor = newColors.memBg;
-        resourceChart.options.scales.x.grid.color = newColors.grid;
-        resourceChart.options.scales.y.grid.color = newColors.grid;
-        resourceChart.options.scales.x.ticks.color = newColors.text;
-        resourceChart.options.scales.y.ticks.color = newColors.text;
-        resourceChart.options.scales.y1.ticks.color = newColors.text;
-        resourceChart.options.scales.y1.title.color = newColors.mem;
-        
-        // 更新 tooltip 颜色
-        resourceChart.options.plugins.tooltip.backgroundColor = isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
-        resourceChart.options.plugins.tooltip.titleColor = isDark ? '#ECF0F1' : '#2C3E50';
-        resourceChart.options.plugins.tooltip.bodyColor = isDark ? '#BDC3C7' : '#7F8C8D';
-        resourceChart.options.plugins.tooltip.borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-        
-        resourceChart.update();
-    });
-</script>
+</html>
