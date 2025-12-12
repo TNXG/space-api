@@ -80,26 +80,20 @@ async fn serve_wallpaper(
             Ok(resp)
         }
         _ => {
-            // 默认：代理图片并处理格式
+            // 默认：代理图片，按格式缓存编码后的结果
             let accept_str = accept.to_string();
 
-            match service.fetch_image(&cdn_url).await {
-                Ok((image_data, _upstream_cache_hit)) => {
-                    let format = service.get_preferred_image_format(&accept_str);
-
-                    let processed = service
-                        .process_image(image_data, None, None, format)
-                        .await?;
-
+            match service.fetch_wallpaper(&cdn_url, &accept_str).await {
+                Ok((encoded_data, format)) => {
                     let content_type = match format {
-                        ImageFormat::Png => ContentType::PNG,
-                        ImageFormat::WebP => ContentType::new("image", "webp"),
                         ImageFormat::Avif => ContentType::new("image", "avif"),
-                        _ => ContentType::JPEG, // 默认为 JPEG
+                        ImageFormat::WebP => ContentType::new("image", "webp"),
+                        ImageFormat::Png => ContentType::PNG,
+                        _ => ContentType::JPEG,
                     };
 
-                    // 设置图片缓存 30s
-                    let resp = CustomResponse::new(content_type, processed, Status::Ok)
+                    // 缓存 30s
+                    let resp = CustomResponse::new(content_type, encoded_data, Status::Ok)
                         .with_header("Cache-Control", "public, max-age=30");
                     Ok(resp)
                 }
