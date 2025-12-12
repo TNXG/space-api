@@ -5,8 +5,10 @@ use space_api_rs::routes;
 use space_api_rs::routes::index::MetricsHistory;
 use space_api_rs::services::db_service;
 use space_api_rs::services::image_service::ImageService;
+use space_api_rs::services::memory_service::MemoryManager;
 use space_api_rs::utils::charset::Utf8CharsetFairing;
 use space_api_rs::utils::cache;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(not(target_os = "windows"))]
@@ -38,6 +40,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    // 初始化内存管理器
+    let memory_manager = Arc::new(MemoryManager::new(config.memory.clone()));
+    
+    // 验证jemalloc配置
+    if let Err(e) = memory_manager.validate_jemalloc_config() {
+        eprintln!("⚠️  内存管理配置验证失败: {}", e);
+    }
+    
+    // 启动内存监控后台任务
+    let _monitoring_handle = memory_manager.start_monitoring();
+    println!("✅ 内存监控系统已启动 (阈值: {} MB, 检查间隔: {} 秒)", 
+        config.memory.threshold_mb, config.memory.check_interval_secs);
+
     // 启动缓存清理后台任务
     tokio::spawn(async {
         let mut interval = tokio::time::interval(Duration::from_secs(60 * 30)); // 每30分钟清理一次
@@ -46,6 +61,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             cache::cleanup_expired_cache();
         }
     });
+
+    // 输出初始内存状态
+    if let Ok(status) = memory_manager.get_memory_status().await {
+        println!("📊 初始内存状态: {} MB (阈值: {} MB, 压力等级: {:?})", 
+            status.current_mb, status.threshold_mb, status.pressure);
+    }
 
     let figment = rocket::Config::figment().merge(("template_dir", "src/templates"));
 
@@ -66,7 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(mongo_client)
         .manage(MetricsHistory::new())
         .manage(routes::index::SystemState::new())
-        .manage(ImageService::new());
+        .manage(ImageService::new())
+        .manage(memory_manager);
 
     // 从Cargo.toml获取版本号
     let version = concat!("v", env!("CARGO_PKG_VERSION"));
