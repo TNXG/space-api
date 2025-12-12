@@ -196,13 +196,46 @@
         }
 
         @media (max-width: 600px) {
+            body {
+                padding: 12px;
+                align-items: flex-start;
+                padding-top: 20px;
+            }
+
             .grid {
                 grid-template-columns: 1fr;
-                gap: 20px;
+                gap: 16px;
             }
 
             .card {
-                padding: 24px;
+                padding: 20px;
+                border-radius: 8px;
+            }
+
+            h1 {
+                font-size: 1.4rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .quote-section {
+                margin: 20px 0 28px 0;
+                padding-left: 12px;
+            }
+
+            .quote-main {
+                font-size: 1rem;
+            }
+
+            .quote-sub {
+                font-size: 0.8rem;
             }
         }
 
@@ -294,8 +327,38 @@
         }
 
         @media (max-width: 600px) {
+            .panel {
+                padding: 16px 18px;
+                margin-top: 6px;
+            }
+
+            .panel-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                margin-bottom: 16px;
+                padding-bottom: 10px;
+            }
+
+            .panel-title {
+                font-size: 0.75rem;
+            }
+
             .panel-grid {
                 grid-template-columns: 1fr;
+                gap: 14px;
+            }
+
+            .panel .info-item {
+                padding: 10px;
+            }
+
+            .label {
+                font-size: 0.7rem;
+            }
+
+            .value {
+                font-size: 0.9rem;
             }
         }
 
@@ -576,6 +639,72 @@
             font-size: 1rem;
         }
 
+        /* 移动端优化 */
+        @media (max-width: 600px) {
+            .chart-wrapper {
+                height: 160px !important;
+            }
+
+            .current-stats {
+                flex-direction: column;
+                gap: 16px;
+                margin-top: 14px;
+                padding-top: 14px;
+            }
+
+            .current-stat {
+                gap: 6px;
+            }
+
+            .current-stat .stat-value {
+                font-size: 1.1rem;
+            }
+
+            .service-tag {
+                font-size: 0.65rem;
+                padding: 2px 6px;
+            }
+
+            .refresh-indicator {
+                font-size: 0.6rem;
+            }
+
+            footer {
+                margin-top: 32px;
+                padding-top: 20px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .tech-badges {
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .tech-pill {
+                font-size: 0.7rem;
+                padding: 3px 8px;
+            }
+
+            .tech-pill iconify-icon {
+                font-size: 0.9rem;
+            }
+
+            .load-display {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .load-item {
+                text-align: left;
+            }
+
+            .load-divider {
+                display: none;
+            }
+        }
+
         /* 自动刷新指示器 */
         .refresh-indicator {
             display: flex;
@@ -589,15 +718,22 @@
             width: 10px;
             height: 10px;
             border: 1.5px solid var(--border-color);
-            border-top-color: var(--accent-color);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
             opacity: 0;
             transition: opacity 0.2s;
         }
 
-        .refresh-indicator .spinner.active {
+        .refresh-indicator .spinner.connected {
             opacity: 1;
+            border-color: var(--success-color);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .refresh-indicator .spinner.reconnecting {
+            opacity: 1;
+            border: 1.5px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            animation: spin 1s linear infinite;
         }
 
         @keyframes spin {
@@ -1054,23 +1190,18 @@
              updateMetrics(data);
              
              refreshText.textContent = 'Live';
-             spinner.classList.add('active'); // Keep spinner spinning to show activity? Or just "Live"
-             // Maybe blink or something? Let's just keep "Live" static and spinner removed or steady.
-             // User likes active stuff. Let's make the spinner spin slowly or pulse.
-             // Currently spinner has animation: spin 1s linear infinite.
-             spinner.classList.add('active'); 
+             spinner.className = 'spinner connected';
         };
 
         evtSource.onerror = (err) => {
             console.error("EventSource failed:", err);
             refreshText.textContent = 'Reconnecting...';
-            spinner.classList.remove('active');
-            // EventSource auto reconnects, but if it fails permanently we might want to logic here.
+            spinner.className = 'spinner reconnecting';
         };
 
         evtSource.onopen = () => {
              refreshText.textContent = 'Live';
-             spinner.classList.add('active');
+             spinner.className = 'spinner connected';
         };
     }
 
@@ -1085,7 +1216,7 @@
                 evtSource.close();
                 evtSource = null;
                 refreshText.textContent = 'Paused';
-                spinner.classList.remove('active');
+                spinner.className = 'spinner';
             }
         } else {
             initSSE();
