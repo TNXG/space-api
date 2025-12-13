@@ -1296,22 +1296,65 @@
                 };
 
                 const parseUA = async () => {
-                    const p = new UAParser(server.rawUa);
-                    const r = p.getResult();
-                    ua.browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
-                    ua.os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
-                    ua.device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
-                    ua.cpu = r.cpu.architecture || 'Unknown Arch';
-
+                    // 优先使用 ClientHints，没有时才回退到 UA 解析
+                    let useClientHints = false;
+                    
                     if (navigator.userAgentData) {
                         try {
-                            const h = await navigator.userAgentData.getHighEntropyValues(["architecture", "model", "platformVersion", "fullVersionList"]);
-                            if (h.architecture) ua.cpu = h.architecture;
-                            if (h.model) ua.device = h.model;
-                            if (h.platform === 'Windows') {
-                                ua.os = parseInt(h.platformVersion.split('.')[0]) >= 13 ? 'Windows 11' : 'Windows 10';
+                            const basicHints = navigator.userAgentData;
+                            const highEntropyHints = await navigator.userAgentData.getHighEntropyValues([
+                                "architecture", "model", "platformVersion", "fullVersionList", "bitness"
+                            ]);
+                            
+                            // 使用 ClientHints 数据
+                            useClientHints = true;
+                            
+                            // Browser 信息
+                            const primaryBrand = basicHints.brands.find(b => !b.brand.includes('Not') && !b.brand.includes('Chromium')) 
+                                || basicHints.brands[0];
+                            const fullVersionBrand = highEntropyHints.fullVersionList?.find(b => b.brand === primaryBrand?.brand);
+                            ua.browser = `${primaryBrand?.brand || 'Unknown'} ${fullVersionBrand?.version || primaryBrand?.version || ''}`;
+                            
+                            // OS 信息
+                            if (basicHints.platform === 'Windows') {
+                                const majorVersion = parseInt(highEntropyHints.platformVersion?.split('.')[0] || '0');
+                                ua.os = majorVersion >= 13 ? 'Windows 11' : 'Windows 10';
+                                if (highEntropyHints.platformVersion) {
+                                    ua.os += ` (${highEntropyHints.platformVersion})`;
+                                }
+                            } else {
+                                ua.os = `${basicHints.platform || 'Unknown'} ${highEntropyHints.platformVersion || ''}`;
                             }
-                        } catch { }
+                            
+                            // Device 信息
+                            if (highEntropyHints.model) {
+                                ua.device = highEntropyHints.model;
+                            } else if (basicHints.mobile) {
+                                ua.device = 'Mobile Device';
+                            } else {
+                                ua.device = 'Desktop / Generic';
+                            }
+                            
+                            // Architecture 信息
+                            ua.cpu = highEntropyHints.architecture || 'Unknown Arch';
+                            if (highEntropyHints.bitness) {
+                                ua.cpu += ` (${highEntropyHints.bitness}-bit)`;
+                            }
+                            
+                        } catch (error) {
+                            console.warn('ClientHints failed, falling back to UA parsing:', error);
+                            useClientHints = false;
+                        }
+                    }
+                    
+                    // 回退到 UA 解析（当 ClientHints 不可用或失败时）
+                    if (!useClientHints) {
+                        const p = new UAParser(server.rawUa);
+                        const r = p.getResult();
+                        ua.browser = `${r.browser.name || 'Unknown'} ${r.browser.version || ''}`;
+                        ua.os = `${r.os.name || 'Unknown'} ${r.os.version || ''}`;
+                        ua.device = r.device.model ? `${r.device.vendor || ''} ${r.device.model}` : 'Desktop / Generic';
+                        ua.cpu = r.cpu.architecture || 'Unknown Arch';
                     }
                 };
 
@@ -1329,7 +1372,8 @@
 
                     // 使用服务器提供的初始历史数据
                     const initialLabels = server.timestamps || [];
-                    const initialCpuData = (server.cpuHistory || []).map(v => v > 1 ? v : v * 100);
+                    // CPU数据现在直接是百分比值，不需要转换
+                    const initialCpuData = server.cpuHistory || [];
                     const initialMemData = server.memHistory || [];
                     const initialSysMemData = server.systemMemoryHistory || [];
 
@@ -1376,7 +1420,8 @@
 
                             if (chartInstance) {
                                 chartInstance.data.labels = d.timestamps || [];
-                                chartInstance.data.datasets[0].data = (d.cpu_history || []).map(v => v > 1 ? v : v * 100);
+                                // CPU数据现在直接是百分比值，不需要转换
+                                chartInstance.data.datasets[0].data = d.cpu_history || [];
                                 chartInstance.data.datasets[1].data = d.mem_history || [];
                                 chartInstance.data.datasets[2].data = d.system_memory_history || [];
                                 chartInstance.update('none');

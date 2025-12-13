@@ -80,8 +80,40 @@ impl<'r> FromRequest<'r> for ClientInfo {
         let protocol = req
             .headers()
             .get_one("eo-connecting-protocol")
-            .map(|p| p.to_uppercase())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .or_else(|| req.headers().get_one("x-forwarded-proto"))
+            .or_else(|| req.headers().get_one("cf-visitor"))
+            .map(|p| {
+                // 解码HTML实体
+                let decoded = p
+                    .replace("&#x2F;", "/")
+                    .replace("&#x3A;", ":")
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&quot;", "\"");
+                
+                // 处理 CloudFlare 的 cf-visitor JSON 格式
+                if decoded.starts_with("{") && decoded.contains("scheme") {
+                    if decoded.contains("\"https\"") {
+                        "HTTPS".to_string()
+                    } else if decoded.contains("\"http\"") {
+                        "HTTP".to_string()
+                    } else {
+                        decoded.to_uppercase()
+                    }
+                } else {
+                    decoded.to_uppercase()
+                }
+            })
+            .unwrap_or_else(|| {
+                // 本地环境或无CDN头时，根据TLS推断协议
+                if req.headers().get_one("x-forwarded-proto").map_or(false, |p| p == "https") {
+                    "HTTPS".to_string()
+                } else {
+                    // 本地开发环境默认HTTP
+                    "HTTP".to_string()
+                }
+            });
 
         Outcome::Success(ClientInfo {
             ip,
@@ -127,6 +159,8 @@ fn get_process_stats(sys: &mut System) -> (u64, u64, f32) {
     sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
     
     if let Some(proc) = sys.process(pid) {
+        // proc.cpu_usage() 返回的是当前进程的CPU使用率百分比
+        // 这个值已经是百分比形式，不需要除以核心数
         (proc.memory(), proc.virtual_memory(), proc.cpu_usage())
     } else {
         (0, 0, 0.0)
@@ -144,14 +178,14 @@ pub async fn index(
     let now = Local::now();
 
     // Scope the lock so it drops before async calls
-    let (total_system_mem, cpu_count, proc_rss, proc_virtual, proc_cpu_raw, 
+    let (total_system_mem, proc_rss, proc_virtual, proc_cpu_raw, 
          os_name, sys_os_version, sys_kernel, sys_hostname, 
          avg_load, uptime_sec, boot_time_sec) = {
         let mut sys = sys_state.system.lock().unwrap();
         
         // Refresh only what we need
         sys.refresh_memory();
-        sys.refresh_cpu_all();
+        // 不需要refresh_cpu_all，因为我们只关心当前进程的CPU使用率
         
         let os_name = System::name().unwrap_or("Unknown".to_string());
         let sys_os_version = System::os_version().unwrap_or_default();
@@ -163,18 +197,18 @@ pub async fn index(
         let boot_time_sec = System::boot_time();
         
         let total_system_mem = sys.total_memory();
-        let cpu_count = sys.cpus().len().max(1) as f32;
         
         let (rss, virt, cpu) = get_process_stats(&mut sys);
-        (total_system_mem, cpu_count, rss, virt, cpu,
+        (total_system_mem, rss, virt, cpu,
          os_name, sys_os_version, sys_kernel, sys_hostname,
          avg_load, uptime_sec, boot_time_sec)
     };
     
     let boot_time = Local.timestamp_opt(boot_time_sec as i64, 0).unwrap();
 
-    // 标准化 CPU 使用率（sysinfo 返回的是所有核心的总和百分比）
-    let proc_cpu = proc_cpu_raw / cpu_count;
+    // 进程CPU使用率已经是正确的百分比值，不需要除以核心数
+    // sysinfo的process.cpu_usage()返回的是该进程占用的CPU百分比（0-100%）
+    let proc_cpu = proc_cpu_raw;
 
     let mem_percent = if total_system_mem > 0 {
         (proc_rss as f64 / total_system_mem as f64) * 100.0
@@ -278,16 +312,16 @@ pub async fn get_metrics(
     sys_state: &State<SystemState>,
     memory_manager: &State<Arc<MemoryManager>>,
 ) -> rocket::serde::json::Json<serde_json::Value> {
-    let (proc_rss, proc_cpu_raw, cpu_count) = {
+    let (proc_rss, proc_cpu_raw) = {
         let mut sys = sys_state.system.lock().unwrap();
         sys.refresh_memory();
-        sys.refresh_cpu_all();
-        let cpu_count = sys.cpus().len().max(1) as f32;
-
+        // 不需要refresh_cpu_all，因为我们只关心当前进程的CPU使用率
+        
         let (proc_rss, _, proc_cpu_raw) = get_process_stats(&mut sys);
-        (proc_rss, proc_cpu_raw, cpu_count)
+        (proc_rss, proc_cpu_raw)
     };
-    let proc_cpu = proc_cpu_raw / cpu_count;
+    // 进程CPU使用率已经是正确的百分比值
+    let proc_cpu = proc_cpu_raw;
 
     let now = Local::now();
     let timestamp = now.format("%H:%M:%S").to_string();
@@ -380,20 +414,19 @@ pub fn metrics_stream(
     let memory_manager = memory_manager.inner().clone();
 
     EventStream! {
-        let mut timer = interval(Duration::from_secs(2)); // Push every 2 seconds
+        let mut timer = interval(Duration::from_secs(5)); // Push every 5 seconds (reduced frequency)
 
         loop {
             let _ = timer.tick().await;
 
-            let (proc_rss, proc_virtual, proc_cpu_raw, cpu_count) = {
+            let (proc_rss, proc_virtual, proc_cpu_raw) = {
                 // Warning: Blocking operation in async loop. 
                 // sysinfo refresh is usually fast but strictly should be spawn_blocking.
                 // For simplicity we keep it inline as requested "simple implementation".
                 // If needed we can wrap in task::spawn_blocking.
                 let mut sys = sys_state.system.lock().unwrap();
                 sys.refresh_memory();
-                sys.refresh_cpu_all();
-                let cpu_count = sys.cpus().len().max(1) as f32;
+                // 不需要refresh_cpu_all，因为我们只关心当前进程的CPU使用率
                 let pid = Pid::from(process::id() as usize);
                 sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
                 
@@ -402,10 +435,11 @@ pub fn metrics_stream(
                 } else {
                     (0, 0, 0.0)
                 };
-                (rss, virt, cpu, cpu_count)
+                (rss, virt, cpu)
             };
             
-            let proc_cpu = proc_cpu_raw / cpu_count;
+            // 进程CPU使用率已经是正确的百分比值
+            let proc_cpu = proc_cpu_raw;
             let now = Local::now();
             let timestamp = now.format("%H:%M:%S").to_string();
 
