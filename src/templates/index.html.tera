@@ -982,7 +982,7 @@
         "serverTime": "{{ server_time }}",
         "clientIp": "{{ client_ip }}",
         "clientLocation": "{{ client_location }}",
-        "clientProtocol": "{{ client_protocol }}",
+        "clientProtocol": "{{ client_protocol | safe }}",
         "mongoStatus": "{{ mongo_status }}",
         "sysOs": "{{ sys_os }}",
         "sysArch": "{{ sys_arch }}",
@@ -1178,7 +1178,7 @@
                             <div class="current-stat">
                                 <div class="stat-label">CPU Usage</div>
                                 <div class="stat-value cpu">
-                                    {{ (realtime.cpu * 100).toFixed(1) }}<span class="stat-unit">%</span>
+                                    {{ realtime.cpu.toFixed(1) }}<span class="stat-unit">%</span>
                                 </div>
                             </div>
 

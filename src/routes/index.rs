@@ -77,43 +77,23 @@ impl<'r> FromRequest<'r> for ClientInfo {
             .unwrap_or("Unknown Region")
             .to_string();
 
-        let protocol = req
-            .headers()
-            .get_one("eo-connecting-protocol")
-            .or_else(|| req.headers().get_one("x-forwarded-proto"))
-            .or_else(|| req.headers().get_one("cf-visitor"))
-            .map(|p| {
-                // 解码HTML实体
-                let decoded = p
-                    .replace("&#x2F;", "/")
-                    .replace("&#x3A;", ":")
-                    .replace("&amp;", "&")
-                    .replace("&lt;", "<")
-                    .replace("&gt;", ">")
-                    .replace("&quot;", "\"");
-                
-                // 处理 CloudFlare 的 cf-visitor JSON 格式
-                if decoded.starts_with("{") && decoded.contains("scheme") {
-                    if decoded.contains("\"https\"") {
-                        "HTTPS".to_string()
-                    } else if decoded.contains("\"http\"") {
-                        "HTTP".to_string()
-                    } else {
-                        decoded.to_uppercase()
-                    }
-                } else {
-                    decoded.to_uppercase()
-                }
-            })
-            .unwrap_or_else(|| {
-                // 本地环境或无CDN头时，根据TLS推断协议
-                if req.headers().get_one("x-forwarded-proto").map_or(false, |p| p == "https") {
-                    "HTTPS".to_string()
-                } else {
-                    // 本地开发环境默认HTTP
-                    "HTTP".to_string()
-                }
-            });
+        let protocol = {
+            // 检查是否是HTTPS
+            let is_https = req.headers().get_one("x-forwarded-proto").map_or(false, |p| p == "https")
+                || req.headers().get_one("cf-visitor").map_or(false, |v| v.contains("\"https\""))
+                || req.headers().get_one("eo-connecting-protocol").map_or(false, |p| p.to_lowercase().contains("https"));
+            
+            // 尝试从headers中获取HTTP版本信息
+            let version = req.headers().get_one(":version")
+                .or_else(|| req.headers().get_one("http-version"))
+                .unwrap_or("1.1"); // 默认HTTP/1.1
+            
+            if is_https {
+                format!("HTTPS/{}", version)
+            } else {
+                format!("HTTP/{}", version)
+            }
+        };
 
         Outcome::Success(ClientInfo {
             ip,
