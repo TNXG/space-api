@@ -66,9 +66,16 @@ impl<'r> FromRequest<'r> for ClientInfo {
             .to_string();
 
         let ip = req
-            .client_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|| "Unknown".to_string());
+            .headers()
+            .get_one("CF-Connecting-IP")
+            .or_else(|| req.headers().get_one("X-Forwarded-For").and_then(|s| s.split(',').next()))
+            .or_else(|| req.headers().get_one("X-Real-IP"))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                req.client_ip()
+                    .map(|ip| ip.to_string())
+                    .unwrap_or_else(|| "Unknown".to_string())
+            });
 
         let location = req
             .headers()

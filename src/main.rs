@@ -4,6 +4,7 @@ use space_api_rs::config;
 use space_api_rs::routes;
 use space_api_rs::routes::index::MetricsHistory;
 use space_api_rs::services::db_service;
+use space_api_rs::services::friend_avatar_service::FriendAvatarService;
 use space_api_rs::services::image_service::ImageService;
 use space_api_rs::services::memory_service::MemoryManager;
 use space_api_rs::utils::charset::Utf8CharsetFairing;
@@ -77,8 +78,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/", routes::index::routes())
         .mount("/avatar", routes::avatar::routes())
         .mount("/email", routes::email::routes())
+        .mount("/friend-avatar", routes::friend_avatar::routes())
         .mount("/images", routes::images::routes())
-        .mount("/links", routes::links::routes())
         .mount("/oauth", routes::oauth::routes())
         .mount("/status", routes::status::routes())
         .mount("/", routes::sw::routes())
@@ -88,6 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(MetricsHistory::new())
         .manage(routes::index::SystemState::new())
         .manage(ImageService::new())
+        .manage(FriendAvatarService::new())
         .manage(memory_manager);
 
     // 从Cargo.toml获取版本号
