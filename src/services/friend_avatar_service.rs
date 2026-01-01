@@ -243,17 +243,23 @@ impl FriendAvatarService {
 
     /// 下载原始图片
     async fn download_image(&self, url: &str) -> Result<Vec<u8>> {
+        println!("[FriendAvatar] Fetching URL: {}", url);
+        
         let response = self
             .client
             .get(url)
+            .header("User-Agent", "Mozilla/5.0 (compatible; MaigoStarlightChecker/1.0; +mailto:tnxg@outlook.jp; ) AppleWebKit/99 (KHTML, like Gecko) Chrome/99 MyGO/5 (KiraKira/DokiDoki; Bananice/Protected) Giraffe/4.11 (Wakarimasu/; Haruhikage/Stop)")
             .send()
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch image: {}", e)))?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        println!("[FriendAvatar] Response status: {}", status);
+        
+        if !status.is_success() {
             return Err(Error::NotFound(format!(
                 "Image not found: HTTP {}",
-                response.status()
+                status
             )));
         }
 
@@ -262,6 +268,7 @@ impl FriendAvatarService {
             .await
             .map_err(|e| Error::Internal(format!("Failed to read image bytes: {}", e)))?;
 
+        println!("[FriendAvatar] Downloaded {} bytes", bytes.len());
         Ok(bytes.to_vec())
     }
 

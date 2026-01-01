@@ -46,11 +46,12 @@ impl<'r> Responder<'r, 'static> for CustomResponse {
         let mut builder = Response::build();
         builder.header(self.content_type);
         builder.status(self.status);
+        
         let mut headers = self.headers;
         headers.push(if self.cache {
-            ("SERVER-CACHE".into(), "HIT".into())
+            ("server-cache".into(), "HIT".into())
         } else {
-            ("SERVER-CACHE".into(), "MISS".into())
+            ("server-cache".into(), "MISS".into())
         });
 
         for (k, v) in headers {

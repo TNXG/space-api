@@ -42,6 +42,8 @@ async fn get_friend_avatar(
         _ => "public, max-age=3600, s-maxage=3600",         // 默认1小时
     };
 
+    let cache_hit = cache_status == "hit";
+    
     let status_message = match cache_status.as_str() {
         "hit" => "Fresh cache hit",
         "stale" => "Stale cache, updating in background",
@@ -51,8 +53,8 @@ async fn get_friend_avatar(
 
     Ok(CustomResponse::new(content_type, image_data, Status::Ok)
         .with_header("Cache-Control", cache_control)
-        .with_header("X-Cache-Status", cache_status)
-        .with_header("X-Cache-Message", status_message))
+        .with_header("X-Cache-Message", status_message)
+        .with_cache(cache_hit))
 }
 
 pub fn routes() -> Vec<Route> {

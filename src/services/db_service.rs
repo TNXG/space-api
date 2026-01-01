@@ -37,6 +37,13 @@ pub async fn initialize_db(config: &MongoConfig) -> Result<Client> {
     // 优化连接池 (默认是100，对于个人项目太大了)
     client_options.min_pool_size = Some(0);
     client_options.max_pool_size = Some(10);
+    
+    // 禁用副本集检测，直接连接（适用于单机 MongoDB）
+    client_options.direct_connection = Some(true);
+    
+    // 设置连接超时（避免长时间等待）
+    client_options.connect_timeout = Some(std::time::Duration::from_secs(5));
+    client_options.server_selection_timeout = Some(std::time::Duration::from_secs(5));
 
     let client = Client::with_options(client_options).map_err(|e| Error::Database(e.to_string()))?;
 
