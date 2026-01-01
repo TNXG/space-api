@@ -1,6 +1,7 @@
 use crate::config::settings::MongoConfig;
 use crate::{Error, Result};
 use chrono::Utc;
+use log::info;
 use mongodb::{
     bson::{doc, Bson, Document},
     options::{ClientOptions, ServerApi, ServerApiVersion},
@@ -56,7 +57,7 @@ pub async fn initialize_db(config: &MongoConfig) -> Result<Client> {
         .await
         .map_err(|e| Error::Database(e.to_string()))?;
 
-    println!("✅ 成功连接到MongoDB数据库");
+    info!("成功连接到MongoDB数据库");
 
     let db_arc = Arc::new(Mutex::new(database));
     DB_INSTANCE

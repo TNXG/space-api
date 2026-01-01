@@ -1,6 +1,7 @@
 use crate::utils::cache;
 use crate::{Error, Result};
 use image::ImageFormat;
+use log::{debug, info};
 use reqwest::Client;
 use std::io::Cursor;
 
@@ -33,12 +34,12 @@ impl ImageService {
         
         // 3. 检查硬盘缓存（编码后的数据）
         if let Some(cached_data) = cache::get_disk(&cache_key) {
-            println!("[Wallpaper] Cache hit: {} ({} bytes)", format_ext, cached_data.len());
+            debug!("Wallpaper cache hit: {} ({} bytes)", format_ext, cached_data.len());
             return Ok((cached_data, format));
         }
         
         // 4. 无缓存：下载原图
-        println!("[Wallpaper] Cache miss, downloading: {}", url);
+        info!("Wallpaper cache miss, downloading: {}", url);
         let raw_bytes = self.download_image(url).await?;
         let raw_len = raw_bytes.len();
         
@@ -51,7 +52,7 @@ impl ImageService {
         .map_err(|e| Error::Internal(format!("Task join error: {}", e)))??;
         
         let encoded_len = encoded_bytes.len();
-        println!("[Wallpaper] Encoded: {} -> {} bytes ({})", raw_len, encoded_len, format_ext);
+        debug!("Wallpaper encoded: {} -> {} bytes ({})", raw_len, encoded_len, format_ext);
         
         // 6. 异步写入硬盘缓存（编码后的数据）
         let cache_key_clone = cache_key.clone();
@@ -131,7 +132,7 @@ impl ImageService {
 
         // 1. 内存缓存优先
         if let Some(cached) = cache::get(&cache::CACHE_BUCKET, &memory_cache_key).await {
-            println!("[Avatar] Memory cache hit: {} bytes", cached.len());
+            debug!("Avatar memory cache hit: {} bytes", cached.len());
             return Ok((cached, true));
         }
 
@@ -146,7 +147,7 @@ impl ImageService {
                     cache::put(&cache::CACHE_BUCKET, key, data).await;
                 });
             }
-            println!("[Avatar] Disk cache hit: {} bytes", len);
+            debug!("Avatar disk cache hit: {} bytes", len);
             return Ok((cached, true));
         }
 
@@ -165,7 +166,7 @@ impl ImageService {
             cache::put(&cache::CACHE_BUCKET, memory_cache_key, bytes.clone()).await;
         }
 
-        println!("[Avatar] Downloaded: {} bytes", len);
+        info!("Avatar downloaded: {} bytes", len);
         Ok((bytes, false))
     }
 }

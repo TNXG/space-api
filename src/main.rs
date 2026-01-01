@@ -1,4 +1,5 @@
 use dotenv::dotenv;
+use log::{error, info, warn};
 use rocket_dyn_templates::Template;
 use space_api_rs::config;
 use space_api_rs::routes;
@@ -7,8 +8,8 @@ use space_api_rs::services::db_service;
 use space_api_rs::services::friend_avatar_service::FriendAvatarService;
 use space_api_rs::services::image_service::ImageService;
 use space_api_rs::services::memory_service::MemoryManager;
-use space_api_rs::utils::charset::Utf8CharsetFairing;
 use space_api_rs::utils::cache;
+use space_api_rs::utils::charset::Utf8CharsetFairing;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,27 +33,34 @@ narenas:4\
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
+    // 初始化日志系统
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_millis()
+        .init();
+
     let config = config::settings::load_config();
     let mongo_client = match db_service::initialize_db(&config.mongo).await {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("⚠️  数据库初始化失败: {}", e);
+            error!("数据库初始化失败: {}", e);
             return Err(e.into());
         }
     };
 
     // 初始化内存管理器
     let memory_manager = Arc::new(MemoryManager::new(config.memory.clone()));
-    
+
     // 验证jemalloc配置
     if let Err(e) = memory_manager.validate_jemalloc_config() {
-        eprintln!("⚠️  内存管理配置验证失败: {}", e);
+        warn!("内存管理配置验证失败: {}", e);
     }
-    
+
     // 启动内存监控后台任务
     let _monitoring_handle = memory_manager.start_monitoring();
-    println!("✅ 内存监控系统已启动 (阈值: {} MB, 检查间隔: {} 秒)", 
-        config.memory.threshold_mb, config.memory.check_interval_secs);
+    info!(
+        "内存监控系统已启动 (阈值: {} MB, 检查间隔: {} 秒)",
+        config.memory.threshold_mb, config.memory.check_interval_secs
+    );
 
     // 启动缓存清理后台任务
     tokio::spawn(async {
@@ -65,8 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 输出初始内存状态
     if let Ok(status) = memory_manager.get_memory_status().await {
-        println!("📊 初始内存状态: {} MB (阈值: {} MB, 压力等级: {:?})", 
-            status.current_mb, status.threshold_mb, status.pressure);
+        info!(
+            "初始内存状态: {} MB (阈值: {} MB, 压力等级: {:?})",
+            status.current_mb, status.threshold_mb, status.pressure
+        );
     }
 
     let figment = rocket::Config::figment().merge(("template_dir", "src/templates"));
@@ -94,17 +104,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 从Cargo.toml获取版本号
     let version = concat!("v", env!("CARGO_PKG_VERSION"));
-    println!(
-        r#"
-  ____                                         _ 
- / ___| _ __   __ _  ___ ___        __ _ _ __ (_)
- \___ \| '_ \ / _` |/ __/ _ \_____ / _` | '_ \| |
-  ___) | |_) | (_| | (_|  __/_____| (_| | |_) | |
- |____/| .__/ \__,_|\___\___|      \__,_| .__/|_|
-       |_|                              |_|      
-
- ✿ 🅢 🅟 🅐 🅒 🅔 - 🅐 🅟 🅘 ✿ ({version} BUILD WITH 🚀 Rust · Rocket.rs Framework)
-    "#
+    info!(
+        "\n\
+    ╔═══════════════════════════════════════════════════════════════╗\n\
+    ║                                                               ║\n\
+    ║   ███████╗██████╗  █████╗  ██████╗███████╗                    ║\n\
+    ║   ██╔════╝██╔══██╗██╔══██╗██╔════╝██╔════╝                    ║\n\
+    ║   ███████╗██████╔╝███████║██║     █████╗                      ║\n\
+    ║   ╚════██║██╔═══╝ ██╔══██║██║     ██╔══╝                      ║\n\
+    ║   ███████║██║     ██║  ██║╚██████╗███████╗                    ║\n\
+    ║   ╚══════╝╚═╝     ╚═╝  ╚═╝ ╚═════╝╚══════╝                    ║\n\
+    ║                                                               ║\n\
+    ║    █████╗ ██████╗ ██╗    ██████╗ ███████╗                     ║\n\
+    ║   ██╔══██╗██╔══██╗██║    ██╔══██╗██╔════╝                     ║\n\
+    ║   ███████║██████╔╝██║    ██████╔╝███████╗                     ║\n\
+    ║   ██╔══██║██╔═══╝ ██║    ██╔══██╗╚════██║                     ║\n\
+    ║   ██║  ██║██║     ██║    ██║  ██║███████║                     ║\n\
+    ║   ╚═╝  ╚═╝╚═╝     ╚═╝    ╚═╝  ╚═╝╚══════╝                     ║\n\
+    ║                                                               ║\n\
+    ║   ✨ Version: {:<15} 🚀 Powered by Rust & Rocket     ║\n\
+    ║                                                               ║\n\
+    ╚═══════════════════════════════════════════════════════════════╝\n",
+        version
     );
     rocket.launch().await?;
 

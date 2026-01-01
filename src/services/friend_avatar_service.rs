@@ -1,5 +1,6 @@
 use crate::{Error, Result};
 use image::ImageFormat;
+use log::{debug, error, info};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
@@ -137,7 +138,7 @@ impl FriendAvatarService {
             if meta.is_fresh() {
                 // 缓存新鲜，直接返回
                 if let Some(data) = self.load_cache_data(&cache_key).await {
-                    println!("[FriendAvatar] Fresh cache hit: {}", url);
+                    debug!("FriendAvatar fresh cache hit: {}", url);
                     let status = if meta.legacy_mode { "fallback" } else { "hit" };
                     return Ok((data, format_ext.to_string(), status.to_string()));
                 }
@@ -146,7 +147,7 @@ impl FriendAvatarService {
             // 4. 缓存过期但存在 -> SWR 策略
             if !meta.is_expired() {
                 if let Some(data) = self.load_cache_data(&cache_key).await {
-                    println!("[FriendAvatar] Stale cache hit, triggering background update: {}", url);
+                    info!("FriendAvatar stale cache hit, triggering background update: {}", url);
                     
                     // 后台异步更新（不阻塞当前请求）
                     let service = self.clone_for_background();
@@ -173,7 +174,7 @@ impl FriendAvatarService {
         format: ImageFormat,
         cache_key: &str,
     ) -> Result<(Vec<u8>, String, String)> {
-        println!("[FriendAvatar] Downloading: {}", url);
+        info!("FriendAvatar downloading: {}", url);
 
         // 下载原图
         let raw_bytes = self.download_image(url).await?;
@@ -189,7 +190,7 @@ impl FriendAvatarService {
         // 保存缓存
         self.save_cache(cache_key, &encoded_bytes, url, format_ext).await?;
 
-        println!("[FriendAvatar] Cached: {} bytes ({})", encoded_bytes.len(), format_ext);
+        debug!("FriendAvatar cached: {} bytes ({})", encoded_bytes.len(), format_ext);
         Ok((encoded_bytes, format_ext.to_string(), "hit".to_string()))
     }
 
@@ -204,7 +205,7 @@ impl FriendAvatarService {
         {
             let mut updating = self.updating.write().await;
             if updating.contains(url) {
-                println!("[FriendAvatar] Already updating: {}", url);
+                debug!("FriendAvatar already updating: {}", url);
                 return Ok(());
             }
             updating.insert(url.to_string());
@@ -221,14 +222,14 @@ impl FriendAvatarService {
             .map_err(|e| Error::Internal(format!("Task join error: {}", e)))??;
 
             self.save_cache(cache_key, &encoded_bytes, url, format_ext).await?;
-            println!("[FriendAvatar] Background update success: {}", url);
+            info!("FriendAvatar background update success: {}", url);
             Ok::<(), Error>(())
         }
         .await;
 
         // 处理失败情况
         if let Err(e) = result {
-            eprintln!("[FriendAvatar] Background update failed: {} - {}", url, e);
+            error!("FriendAvatar background update failed: {} - {}", url, e);
             self.mark_update_failure(cache_key).await;
         }
 
@@ -243,7 +244,7 @@ impl FriendAvatarService {
 
     /// 下载原始图片
     async fn download_image(&self, url: &str) -> Result<Vec<u8>> {
-        println!("[FriendAvatar] Fetching URL: {}", url);
+        debug!("FriendAvatar fetching URL: {}", url);
         
         let response = self
             .client
@@ -254,7 +255,7 @@ impl FriendAvatarService {
             .map_err(|e| Error::Internal(format!("Failed to fetch image: {}", e)))?;
 
         let status = response.status();
-        println!("[FriendAvatar] Response status: {}", status);
+        debug!("FriendAvatar response status: {}", status);
         
         if !status.is_success() {
             return Err(Error::NotFound(format!(
@@ -268,7 +269,7 @@ impl FriendAvatarService {
             .await
             .map_err(|e| Error::Internal(format!("Failed to read image bytes: {}", e)))?;
 
-        println!("[FriendAvatar] Downloaded {} bytes", bytes.len());
+        debug!("FriendAvatar downloaded {} bytes", bytes.len());
         Ok(bytes.to_vec())
     }
 

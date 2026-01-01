@@ -1,3 +1,4 @@
+use log::{debug, error, info};
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use std::time::Duration;
@@ -95,16 +96,16 @@ pub fn put_disk(key: &str, value: &[u8]) {
     // 创建必要的父目录
     if let Some(parent) = path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("[Cache] Failed to create cache dir {:?}: {}", parent, e);
+            error!("Failed to create cache dir {:?}: {}", parent, e);
             return;
         }
     }
 
     // 直接写入，不限制缓存次数
     if let Err(e) = fs::write(&path, value) {
-        eprintln!("[Cache] Failed to write cache file {:?}: {}", path, e);
+        error!("Failed to write cache file {:?}: {}", path, e);
     } else {
-        println!("[Cache] Cached to disk: {} bytes -> {:?}", value.len(), path);
+        debug!("Cached to disk: {} bytes -> {:?}", value.len(), path);
     }
 }
 
@@ -129,7 +130,7 @@ pub fn get_disk(key: &str) -> Option<Vec<u8>> {
         if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
             if elapsed.as_secs() > IMAGE_CACHE_TTL {
                 let _ = fs::remove_file(&path);
-                println!("[Cache] Expired cache removed: {:?}", path);
+                debug!("Expired cache removed: {:?}", path);
                 return None;
             }
         }
@@ -137,11 +138,11 @@ pub fn get_disk(key: &str) -> Option<Vec<u8>> {
 
     match fs::read(&path) {
         Ok(data) => {
-            println!("[Cache] Disk hit: {} bytes from {:?}", data.len(), path);
+            debug!("Disk cache hit: {} bytes from {:?}", data.len(), path);
             Some(data)
         },
         Err(e) => {
-            eprintln!("[Cache] Read failed {:?}: {}", path, e);
+            error!("Cache read failed {:?}: {}", path, e);
             None
         }
     }
@@ -206,7 +207,7 @@ pub fn cleanup_expired_cache() {
                         if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
                             if elapsed.as_secs() > IMAGE_CACHE_TTL {
                                 let _ = fs::remove_file(&path);
-                                println!("[Cache] Cleaned expired cache file: {:?}", path);
+                                debug!("Cleaned expired cache file: {:?}", path);
                             }
                         }
                     }
@@ -220,18 +221,18 @@ pub fn cleanup_expired_cache() {
     let (before_count, before_size) = get_disk_cache_stats();
     
     if let Err(e) = cleanup_dir(cache_dir) {
-        eprintln!("[Cache] Failed to cleanup cache directory: {}", e);
+        error!("Failed to cleanup cache directory: {}", e);
     } else {
         let (after_count, after_size) = get_disk_cache_stats();
         let cleaned_count = before_count.saturating_sub(after_count);
         let cleaned_size = before_size.saturating_sub(after_size);
         
         if cleaned_count > 0 {
-            println!("[Cache] Cleanup completed: removed {} files, freed {} bytes", 
+            info!("Cache cleanup completed: removed {} files, freed {} bytes", 
                     cleaned_count, cleaned_size);
         }
         
-        println!("[Cache] Current stats: {} files, {} bytes total", 
+        debug!("Cache stats: {} files, {} bytes total", 
                 after_count, after_size);
     }
 }

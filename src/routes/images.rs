@@ -2,6 +2,7 @@ use crate::services::image_service::ImageService;
 use crate::utils::custom_response::CustomResponse;
 use crate::Result;
 use image::ImageFormat;
+use log::error;
 use once_cell::sync::Lazy;
 use rocket::http::{Accept, ContentType, Status};
 use rocket::{get, routes, Route, State}; // 导入 State
@@ -19,7 +20,7 @@ const BLURHASH_RAW: &str = include_str!("../../src/data/blurhash.json");
 
 static BLURHASH: Lazy<BlurhashData> = Lazy::new(|| {
     serde_json::from_str(BLURHASH_RAW).unwrap_or_else(|e| {
-        eprintln!("[images] Failed to parse embedded blurhash.json: {}", e);
+        error!("Failed to parse embedded blurhash.json: {}", e);
         BlurhashData::default()
     })
 });
@@ -98,7 +99,7 @@ async fn serve_wallpaper(
                     Ok(resp)
                 }
                 Err(e) => {
-                    eprintln!("Error fetching wallpaper [{}]: {}", cdn_url, e);
+                    error!("Error fetching wallpaper [{}]: {}", cdn_url, e);
                     let payload = json!({
                         "code": "500",
                         "message": "Error fetching wallpaper source",
