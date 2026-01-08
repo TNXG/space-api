@@ -117,13 +117,74 @@ impl ImageService {
     }
 
     /// 格式扩展名
-    fn format_extension(format: ImageFormat) -> &'static str {
+    pub fn format_extension(format: ImageFormat) -> &'static str {
         match format {
             ImageFormat::Avif => "avif",
             ImageFormat::WebP => "webp",
             ImageFormat::Png => "png",
             _ => "jpeg",
         }
+    }
+
+    /// 检测图片格式（通过魔数）
+    pub fn detect_format(bytes: &[u8]) -> Option<ImageFormat> {
+        if bytes.len() < 12 {
+            return None;
+        }
+        
+        // AVIF: 检查 ftyp box
+        if &bytes[4..8] == b"ftyp" {
+            let brand = &bytes[8..12];
+            if brand == b"avif" || brand == b"avis" || brand == b"mif1" {
+                return Some(ImageFormat::Avif);
+            }
+        }
+        
+        // PNG: 89 50 4E 47
+        if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+            return Some(ImageFormat::Png);
+        }
+        
+        // JPEG: FF D8 FF
+        if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            return Some(ImageFormat::Jpeg);
+        }
+        
+        // WebP: RIFF....WEBP
+        if &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+            return Some(ImageFormat::WebP);
+        }
+        
+        // GIF: GIF87a or GIF89a
+        if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+            return Some(ImageFormat::Gif);
+        }
+        
+        None
+    }
+
+    /// 智能转码：如果源格式无法解码或已是目标格式则透传
+    /// 
+    /// 返回 (图片数据, 实际格式)
+    pub fn smart_transcode(raw_bytes: Vec<u8>, target_format: ImageFormat) -> Result<(Vec<u8>, ImageFormat)> {
+        // 检测源格式
+        if let Some(source_format) = Self::detect_format(&raw_bytes) {
+            // 已经是目标格式，直接返回
+            if source_format == target_format {
+                debug!("Image already in target format ({}), passing through", Self::format_extension(target_format));
+                return Ok((raw_bytes, target_format));
+            }
+            
+            // AVIF 无法解码，直接透传
+            if source_format == ImageFormat::Avif {
+                debug!("Source is AVIF (cannot decode), passing through");
+                return Ok((raw_bytes, ImageFormat::Avif));
+            }
+        }
+        
+        // 尝试转码
+        let encoded = Self::encode_image_blocking(&raw_bytes, target_format)?;
+        Ok((encoded, target_format))
     }
 
     /// 头像获取：内存缓存优先（头像通常较小）

@@ -1,9 +1,9 @@
+use crate::services::image_service::ImageService;
 use crate::{Error, Result};
 use image::ImageFormat;
 use log::{debug, error, info};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::io::Cursor;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs;
@@ -110,61 +110,91 @@ impl FriendAvatarService {
 
     /// 获取友链头像
     /// 
-    /// 缓存策略：
-    /// 1. 检查缓存是否新鲜（2小时内）-> 直接返回
-    /// 2. 缓存过期但存在 -> 返回旧缓存，后台异步更新（SWR）
-    /// 3. 无缓存 -> 同步下载并缓存
-    /// 4. 下载失败且有旧缓存 -> 进入 legacy 模式，保留旧缓存
+    /// 缓存策略（SWR - Stale While Revalidate）：
+    /// 1. 有缓存 -> 立即返回，根据新鲜度决定是否后台更新
+    /// 2. 无缓存 -> 同步下载
+    /// 3. 强制刷新 -> 同步下载
     pub async fn fetch_friend_avatar(
         &self,
         url: &str,
         accept_header: &str,
         force_refresh: bool,
     ) -> Result<(Vec<u8>, String, String)> {
-        let format = self.get_preferred_format(accept_header);
-        let format_ext = Self::format_extension(format);
-        let cache_key = self.get_cache_key(url, format_ext);
-
-        // 1. 读取元数据
-        let metadata = self.load_metadata(&cache_key).await;
-
-        // 2. 强制刷新
+        let target_format = self.get_preferred_format(accept_header);
+        let target_format_ext = ImageService::format_extension(target_format);
+        
+        // 尝试多种格式的缓存（优先目标格式，其次 avif/webp/jpeg）
+        let formats_to_try = [target_format_ext, "avif", "webp", "jpeg"];
+        
+        info!("[友链头像] 请求: {} (目标格式: {})", url, target_format_ext);
+        
+        // 强制刷新：直接下载
         if force_refresh {
-            return self.download_and_cache(url, format, &cache_key).await;
+            info!("[友链头像] 强制刷新: {}", url);
+            let cache_key = self.get_cache_key(url, target_format_ext);
+            return self.download_and_cache(url, target_format, &cache_key).await;
         }
 
-        // 3. 检查缓存新鲜度
-        if let Some(ref meta) = metadata {
-            if meta.is_fresh() {
-                // 缓存新鲜，直接返回
-                if let Some(data) = self.load_cache_data(&cache_key).await {
-                    debug!("FriendAvatar fresh cache hit: {}", url);
-                    let status = if meta.legacy_mode { "fallback" } else { "hit" };
-                    return Ok((data, format_ext.to_string(), status.to_string()));
+        // 尝试读取缓存（按格式优先级）
+        for format_ext in &formats_to_try {
+            let cache_key = self.get_cache_key(url, format_ext);
+            info!("[友链头像] 尝试读取缓存: format={}, cache_key={}", format_ext, cache_key);
+            let cached_data = self.load_cache_data(&cache_key).await;
+            let metadata = self.load_metadata(&cache_key).await;
+
+            match (&cached_data, &metadata) {
+                (Some(_), Some(_)) => {
+                    info!("[友链头像] 找到缓存文件: {}", format_ext);
+                }
+                (Some(_), None) => {
+                    info!("[友链头像] 找到数据但无元数据: {}", format_ext);
+                }
+                (None, Some(_)) => {
+                    info!("[友链头像] 找到元数据但无数据: {}", format_ext);
+                }
+                (None, None) => {
+                    info!("[友链头像] 无缓存: {}", format_ext);
                 }
             }
 
-            // 4. 缓存过期但存在 -> SWR 策略
-            if !meta.is_expired() {
-                if let Some(data) = self.load_cache_data(&cache_key).await {
-                    info!("FriendAvatar stale cache hit, triggering background update: {}", url);
-                    
-                    // 后台异步更新（不阻塞当前请求）
+            if let (Some(data), Some(meta)) = (cached_data, metadata) {
+                let is_fresh = meta.is_fresh();
+                let is_expired = meta.is_expired();
+                
+                let status = if meta.legacy_mode {
+                    "fallback"
+                } else if is_fresh {
+                    "hit"
+                } else {
+                    "stale"
+                };
+
+                info!("[友链头像] 缓存状态 [{}]: fresh={}, expired={}, legacy={}", 
+                    format_ext, is_fresh, is_expired, meta.legacy_mode);
+
+                // 任何非新鲜的缓存都触发后台更新（包括过期的）
+                if !is_fresh {
+                    info!("[友链头像] 缓存不新鲜，触发后台更新: {}", url);
                     let service = self.clone_for_background();
                     let url_clone = url.to_string();
                     let cache_key_clone = cache_key.clone();
+                    let target_format_clone = target_format;
                     tokio::spawn(async move {
-                        let _ = service.background_update(&url_clone, format, &cache_key_clone).await;
+                        info!("[友链头像] 后台任务已启动: {}", url_clone);
+                        let _ = service.background_update(&url_clone, target_format_clone, &cache_key_clone).await;
                     });
-
-                    let status = if meta.legacy_mode { "fallback" } else { "stale" };
-                    return Ok((data, format_ext.to_string(), status.to_string()));
                 }
+
+                // 立即返回缓存数据
+                info!("[友链头像] 返回缓存 [{}]: {}", status, url);
+                return Ok((data, format_ext.to_string(), status.to_string()));
             }
         }
 
-        // 5. 无缓存或缓存完全过期 -> 同步下载
-        self.download_and_cache(url, format, &cache_key).await
+        // 无缓存：同步下载
+        info!("[友链头像] 无缓存，开始下载: {}", url);
+        let cache_key = self.get_cache_key(url, target_format_ext);
+        self.download_and_cache(url, target_format, &cache_key).await
     }
 
     /// 同步下载并缓存
@@ -174,24 +204,32 @@ impl FriendAvatarService {
         format: ImageFormat,
         cache_key: &str,
     ) -> Result<(Vec<u8>, String, String)> {
-        info!("FriendAvatar downloading: {}", url);
-
         // 下载原图
         let raw_bytes = self.download_image(url).await?;
+        info!("[友链头像] 下载完成: {} ({} 字节)", url, raw_bytes.len());
 
-        // 编码为目标格式
-        let format_ext = Self::format_extension(format);
-        let encoded_bytes = tokio::task::spawn_blocking(move || {
-            Self::encode_image_blocking(&raw_bytes, format)
+        // 智能转码（AVIF 等无法解码的格式会透传）
+        let (final_bytes, final_format) = tokio::task::spawn_blocking(move || {
+            ImageService::smart_transcode(raw_bytes, format)
         })
         .await
         .map_err(|e| Error::Internal(format!("Task join error: {}", e)))??;
 
+        let format_ext = ImageService::format_extension(final_format);
+        
+        // 如果格式变了（如 AVIF 透传），需要用新的 cache_key
+        let actual_cache_key = if final_format != format {
+            info!("[友链头像] 格式变更: {} -> {}", ImageService::format_extension(format), format_ext);
+            self.get_cache_key(url, format_ext)
+        } else {
+            cache_key.to_string()
+        };
+        
         // 保存缓存
-        self.save_cache(cache_key, &encoded_bytes, url, format_ext).await?;
+        self.save_cache(&actual_cache_key, &final_bytes, url, format_ext).await?;
 
-        debug!("FriendAvatar cached: {} bytes ({})", encoded_bytes.len(), format_ext);
-        Ok((encoded_bytes, format_ext.to_string(), "hit".to_string()))
+        info!("[友链头像] 缓存已保存: {} ({} 字节, {})", url, final_bytes.len(), format_ext);
+        Ok((final_bytes, format_ext.to_string(), "hit".to_string()))
     }
 
     /// 后台更新（SWR）
@@ -205,31 +243,46 @@ impl FriendAvatarService {
         {
             let mut updating = self.updating.write().await;
             if updating.contains(url) {
-                debug!("FriendAvatar already updating: {}", url);
+                debug!("[友链头像] 已在更新中，跳过: {}", url);
                 return Ok(());
             }
             updating.insert(url.to_string());
         }
 
+        info!("[友链头像] 后台更新开始: {}", url);
+
         // 执行更新
         let result = async {
             let raw_bytes = self.download_image(url).await?;
-            let format_ext = Self::format_extension(format);
-            let encoded_bytes = tokio::task::spawn_blocking(move || {
-                Self::encode_image_blocking(&raw_bytes, format)
+            info!("[友链头像] 后台下载完成: {} ({} 字节)", url, raw_bytes.len());
+            
+            // 智能转码
+            let (final_bytes, final_format) = tokio::task::spawn_blocking(move || {
+                ImageService::smart_transcode(raw_bytes, format)
             })
             .await
             .map_err(|e| Error::Internal(format!("Task join error: {}", e)))??;
 
-            self.save_cache(cache_key, &encoded_bytes, url, format_ext).await?;
-            info!("FriendAvatar background update success: {}", url);
+            let final_format_ext = ImageService::format_extension(final_format);
+            
+            // 如果格式变了（如 AVIF 透传），需要用新的 cache_key
+            let actual_cache_key = if final_format != format {
+                info!("[友链头像] 后台更新格式变更: {} -> {}", 
+                    ImageService::format_extension(format), final_format_ext);
+                self.get_cache_key(url, final_format_ext)
+            } else {
+                cache_key.to_string()
+            };
+
+            self.save_cache(&actual_cache_key, &final_bytes, url, final_format_ext).await?;
+            info!("[友链头像] 后台更新成功: {} ({} 字节, {})", url, final_bytes.len(), final_format_ext);
             Ok::<(), Error>(())
         }
         .await;
 
         // 处理失败情况
         if let Err(e) = result {
-            error!("FriendAvatar background update failed: {} - {}", url, e);
+            error!("[友链头像] 后台更新失败: {} - {}", url, e);
             self.mark_update_failure(cache_key).await;
         }
 
@@ -244,7 +297,7 @@ impl FriendAvatarService {
 
     /// 下载原始图片
     async fn download_image(&self, url: &str) -> Result<Vec<u8>> {
-        debug!("FriendAvatar fetching URL: {}", url);
+        debug!("[友链头像] 正在请求: {}", url);
         
         let response = self
             .client
@@ -252,14 +305,14 @@ impl FriendAvatarService {
             .header("User-Agent", "Mozilla/5.0 (compatible; MaigoStarlightChecker/1.0; +mailto:tnxg@outlook.jp; ) AppleWebKit/99 (KHTML, like Gecko) Chrome/99 MyGO/5 (KiraKira/DokiDoki; Bananice/Protected) Giraffe/4.11 (Wakarimasu/; Haruhikage/Stop)")
             .send()
             .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch image: {}", e)))?;
+            .map_err(|e| Error::Internal(format!("请求失败: {}", e)))?;
 
         let status = response.status();
-        debug!("FriendAvatar response status: {}", status);
+        debug!("[友链头像] 响应状态: {}", status);
         
         if !status.is_success() {
             return Err(Error::NotFound(format!(
-                "Image not found: HTTP {}",
+                "图片未找到: HTTP {}",
                 status
             )));
         }
@@ -267,22 +320,9 @@ impl FriendAvatarService {
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| Error::Internal(format!("Failed to read image bytes: {}", e)))?;
+            .map_err(|e| Error::Internal(format!("读取响应失败: {}", e)))?;
 
-        debug!("FriendAvatar downloaded {} bytes", bytes.len());
         Ok(bytes.to_vec())
-    }
-
-    /// 阻塞式图片编码
-    fn encode_image_blocking(raw_bytes: &[u8], format: ImageFormat) -> Result<Vec<u8>> {
-        let img = image::load_from_memory(raw_bytes)
-            .map_err(|e| Error::Internal(format!("Failed to decode image: {}", e)))?;
-
-        let mut output = Vec::new();
-        img.write_to(&mut Cursor::new(&mut output), format)
-            .map_err(|e| Error::Internal(format!("Failed to encode image: {}", e)))?;
-
-        Ok(output)
     }
 
     /// 保存缓存（数据 + 元数据）
@@ -361,16 +401,6 @@ impl FriendAvatarService {
             ImageFormat::WebP
         } else {
             ImageFormat::Jpeg
-        }
-    }
-
-    /// 格式扩展名
-    fn format_extension(format: ImageFormat) -> &'static str {
-        match format {
-            ImageFormat::Avif => "avif",
-            ImageFormat::WebP => "webp",
-            ImageFormat::Png => "png",
-            _ => "jpeg",
         }
     }
 
