@@ -183,21 +183,31 @@ fn get_disk_cache_stats() -> (usize, u64) {
     (file_count, total_size)
 }
 
+/// 不由通用清理任务管理的目录（有独立缓存策略）
+const CACHE_EXCLUDED_DIRS: &[&str] = &["friend_avatars"];
+
 // 清理过期的缓存文件
 pub fn cleanup_expired_cache() {
     use std::fs;
     use std::path::Path;
-    
+
     fn cleanup_dir(dir: &Path) -> std::io::Result<()> {
         if !dir.exists() {
             return Ok(());
         }
-        
+
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_dir() {
+                // 跳过有独立缓存策略的目录
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if CACHE_EXCLUDED_DIRS.contains(&name) {
+                        debug!("Skipping excluded cache dir: {:?}", path);
+                        continue;
+                    }
+                }
                 cleanup_dir(&path)?;
                 // 尝试删除空目录
                 let _ = fs::remove_dir(&path);
