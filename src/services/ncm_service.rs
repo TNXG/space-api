@@ -3,7 +3,7 @@ use aes::cipher::{BlockDecryptMut, BlockEncryptMut, KeyInit};
 use aes::Aes128;
 use ecb::{Decryptor, Encryptor};
 use md5;
-use rand::Rng;
+use rand::RngExt;
 use reqwest::header::{HeaderMap, ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, COOKIE, USER_AGENT};
 use serde::Serialize;
 use serde_json::Value;

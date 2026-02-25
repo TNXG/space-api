@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use moka::future::Cache;
 use once_cell::sync::Lazy;
-use rand::Rng;
+use rand::RngExt;
 // 暂时移除，我们使用其他方式生成验证码
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

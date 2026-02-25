@@ -8,7 +8,7 @@ use mongodb::bson::doc;
 use crate::services::db_service;
 use rocket::response::Redirect;
 use rocket::serde::json::serde_json;
-use rand::RngCore;
+use rand::Rng;
 use hex::ToHex;
 use chrono::{Utc, Duration};
 use url::Url;
