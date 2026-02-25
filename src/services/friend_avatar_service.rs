@@ -5,6 +5,7 @@ use log::{debug, error, info};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::sync::RwLock;
@@ -93,7 +94,7 @@ pub struct FriendAvatarService {
     client: Client,
     cache_dir: PathBuf,
     /// 正在更新的 URL 集合（防止并发重复请求）
-    updating: RwLock<std::collections::HashSet<String>>,
+    updating: Arc<RwLock<std::collections::HashSet<String>>>,
 }
 
 impl FriendAvatarService {
@@ -104,7 +105,7 @@ impl FriendAvatarService {
                 .build()
                 .unwrap(),
             cache_dir: PathBuf::from("cache/friend_avatars"),
-            updating: RwLock::new(std::collections::HashSet::new()),
+            updating: Arc::new(RwLock::new(std::collections::HashSet::new())),
         }
     }
 
@@ -404,12 +405,12 @@ impl FriendAvatarService {
         }
     }
 
-    /// 克隆用于后台任务（避免生命周期问题）
+    /// 克隆用于后台任务（共享 updating 集合）
     fn clone_for_background(&self) -> Self {
         Self {
             client: self.client.clone(),
             cache_dir: self.cache_dir.clone(),
-            updating: RwLock::new(std::collections::HashSet::new()),
+            updating: Arc::clone(&self.updating),
         }
     }
 }
