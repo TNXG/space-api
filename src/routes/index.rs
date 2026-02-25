@@ -168,7 +168,7 @@ pub async fn index(
     let (total_system_mem, proc_rss, proc_virtual, proc_cpu_raw, 
          os_name, sys_os_version, sys_kernel, sys_hostname, 
          avg_load, uptime_sec, boot_time_sec) = {
-        let mut sys = sys_state.system.lock().unwrap();
+        let mut sys = sys_state.system.lock().unwrap_or_else(|e| e.into_inner());
         
         // Refresh only what we need
         sys.refresh_memory();
@@ -191,7 +191,9 @@ pub async fn index(
          avg_load, uptime_sec, boot_time_sec)
     };
     
-    let boot_time = Local.timestamp_opt(boot_time_sec as i64, 0).unwrap();
+    let boot_time = Local.timestamp_opt(boot_time_sec as i64, 0)
+        .single()
+        .unwrap_or_else(|| Local::now());
 
     // 进程CPU使用率已经是正确的百分比值，不需要除以核心数
     // sysinfo的process.cpu_usage()返回的是该进程占用的CPU百分比（0-100%）
@@ -212,10 +214,10 @@ pub async fn index(
     // 更新历史数据
     let timestamp = now.format("%H:%M:%S").to_string();
     {
-        let mut cpu_hist = metrics.cpu_history.lock().unwrap();
-        let mut mem_hist = metrics.mem_history.lock().unwrap();
-        let mut sys_mem_hist = metrics.system_memory_history.lock().unwrap();
-        let mut ts_hist = metrics.timestamps.lock().unwrap();
+        let mut cpu_hist = metrics.cpu_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut mem_hist = metrics.mem_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut sys_mem_hist = metrics.system_memory_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut ts_hist = metrics.timestamps.lock().unwrap_or_else(|e| e.into_inner());
 
         if cpu_hist.len() >= 60 {
             cpu_hist.pop_front();
@@ -232,10 +234,10 @@ pub async fn index(
 
     // 获取历史数据用于图表
     let (cpu_history, mem_history, system_memory_history, timestamps) = {
-        let cpu_hist = metrics.cpu_history.lock().unwrap();
-        let mem_hist = metrics.mem_history.lock().unwrap();
-        let sys_mem_hist = metrics.system_memory_history.lock().unwrap();
-        let ts_hist = metrics.timestamps.lock().unwrap();
+        let cpu_hist = metrics.cpu_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mem_hist = metrics.mem_history.lock().unwrap_or_else(|e| e.into_inner());
+        let sys_mem_hist = metrics.system_memory_history.lock().unwrap_or_else(|e| e.into_inner());
+        let ts_hist = metrics.timestamps.lock().unwrap_or_else(|e| e.into_inner());
 
         (
             cpu_hist.iter().cloned().collect::<Vec<_>>(),
@@ -300,7 +302,7 @@ pub async fn get_metrics(
     memory_manager: &State<Arc<MemoryManager>>,
 ) -> rocket::serde::json::Json<serde_json::Value> {
     let (proc_rss, proc_cpu_raw) = {
-        let mut sys = sys_state.system.lock().unwrap();
+        let mut sys = sys_state.system.lock().unwrap_or_else(|e| e.into_inner());
         sys.refresh_memory();
         // 不需要refresh_cpu_all，因为我们只关心当前进程的CPU使用率
         
@@ -321,10 +323,10 @@ pub async fn get_metrics(
 
     // 更新历史
     {
-        let mut cpu_hist = metrics.cpu_history.lock().unwrap();
-        let mut mem_hist = metrics.mem_history.lock().unwrap();
-        let mut sys_mem_hist = metrics.system_memory_history.lock().unwrap();
-        let mut ts_hist = metrics.timestamps.lock().unwrap();
+        let mut cpu_hist = metrics.cpu_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut mem_hist = metrics.mem_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut sys_mem_hist = metrics.system_memory_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut ts_hist = metrics.timestamps.lock().unwrap_or_else(|e| e.into_inner());
 
         if cpu_hist.len() >= 60 {
             cpu_hist.pop_front();
@@ -340,10 +342,10 @@ pub async fn get_metrics(
     }
 
     let (cpu_history, mem_history, system_memory_history, timestamps) = {
-        let cpu_hist = metrics.cpu_history.lock().unwrap();
-        let mem_hist = metrics.mem_history.lock().unwrap();
-        let sys_mem_hist = metrics.system_memory_history.lock().unwrap();
-        let ts_hist = metrics.timestamps.lock().unwrap();
+        let cpu_hist = metrics.cpu_history.lock().unwrap_or_else(|e| e.into_inner());
+        let mem_hist = metrics.mem_history.lock().unwrap_or_else(|e| e.into_inner());
+        let sys_mem_hist = metrics.system_memory_history.lock().unwrap_or_else(|e| e.into_inner());
+        let ts_hist = metrics.timestamps.lock().unwrap_or_else(|e| e.into_inner());
 
         (
             cpu_hist.iter().cloned().collect::<Vec<_>>(),
@@ -407,22 +409,22 @@ pub fn metrics_stream(
             let _ = timer.tick().await;
 
             let (proc_rss, proc_virtual, proc_cpu_raw) = {
-                // Warning: Blocking operation in async loop. 
-                // sysinfo refresh is usually fast but strictly should be spawn_blocking.
-                // For simplicity we keep it inline as requested "simple implementation".
-                // If needed we can wrap in task::spawn_blocking.
-                let mut sys = sys_state.system.lock().unwrap();
-                sys.refresh_memory();
-                // 不需要refresh_cpu_all，因为我们只关心当前进程的CPU使用率
-                let pid = Pid::from(process::id() as usize);
-                sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
-                
-                let (rss, virt, cpu) = if let Some(proc) = sys.process(pid) {
-                    (proc.memory(), proc.virtual_memory(), proc.cpu_usage())
-                } else {
-                    (0, 0, 0.0)
-                };
-                (rss, virt, cpu)
+                // 将阻塞的 sysinfo 操作移到阻塞线程执行
+                let sys_clone = sys_state.system.clone();
+                tokio::task::spawn_blocking(move || {
+                    let mut sys = sys_clone.lock().unwrap_or_else(|e| e.into_inner());
+                    sys.refresh_memory();
+                    let pid = Pid::from(process::id() as usize);
+                    sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+
+                    if let Some(proc) = sys.process(pid) {
+                        (proc.memory(), proc.virtual_memory(), proc.cpu_usage())
+                    } else {
+                        (0, 0, 0.0)
+                    }
+                })
+                .await
+                .unwrap_or((0, 0, 0.0))
             };
             
             // 进程CPU使用率已经是正确的百分比值
@@ -447,10 +449,10 @@ pub fn metrics_stream(
             // Actually, if we want to replace polling, this stream IS the updater.
             
             {
-                let mut cpu_hist = metrics.cpu_history.lock().unwrap();
-                let mut mem_hist = metrics.mem_history.lock().unwrap();
-                let mut sys_mem_hist = metrics.system_memory_history.lock().unwrap();
-                let mut ts_hist = metrics.timestamps.lock().unwrap();
+                let mut cpu_hist = metrics.cpu_history.lock().unwrap_or_else(|e| e.into_inner());
+                let mut mem_hist = metrics.mem_history.lock().unwrap_or_else(|e| e.into_inner());
+                let mut sys_mem_hist = metrics.system_memory_history.lock().unwrap_or_else(|e| e.into_inner());
+                let mut ts_hist = metrics.timestamps.lock().unwrap_or_else(|e| e.into_inner());
 
                 if cpu_hist.len() >= 60 {
                     cpu_hist.pop_front();
@@ -466,10 +468,10 @@ pub fn metrics_stream(
             }
 
             let (cpu_history, mem_history, system_memory_history, timestamps) = {
-                let cpu_hist = metrics.cpu_history.lock().unwrap();
-                let mem_hist = metrics.mem_history.lock().unwrap();
-                let sys_mem_hist = metrics.system_memory_history.lock().unwrap();
-                let ts_hist = metrics.timestamps.lock().unwrap();
+                let cpu_hist = metrics.cpu_history.lock().unwrap_or_else(|e| e.into_inner());
+                let mem_hist = metrics.mem_history.lock().unwrap_or_else(|e| e.into_inner());
+                let sys_mem_hist = metrics.system_memory_history.lock().unwrap_or_else(|e| e.into_inner());
+                let ts_hist = metrics.timestamps.lock().unwrap_or_else(|e| e.into_inner());
 
                 (
                     cpu_hist.iter().cloned().collect::<Vec<_>>(),

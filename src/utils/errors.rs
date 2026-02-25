@@ -59,7 +59,18 @@ impl<'r> Responder<'r, 'static> for Error {
             Error::Internal(_) => "500",
         };
 
-        let message = self.to_string();
+        // 仅对客户端错误返回详细信息，服务端错误返回通用消息（避免泄露内部实现细节）
+        let message = match &self {
+            Error::Database(msg) => {
+                log::error!("Database error: {}", msg);
+                "An internal error occurred".to_string()
+            }
+            Error::Internal(msg) => {
+                log::error!("Internal error: {}", msg);
+                "An internal error occurred".to_string()
+            }
+            other => other.to_string(),
+        };
         let status_text = "failed";
 
         let body = json!({

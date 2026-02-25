@@ -8,7 +8,6 @@ pub static CACHE_BUCKET: Lazy<Cache<String, Vec<u8>>> = Lazy::new(|| {
     Cache::builder()
         .time_to_live(Duration::from_secs(12 * 60 * 60)) // 12小时刷新全部缓存
         .time_to_idle(Duration::from_secs(2 * 60 * 60)) // 2小时不访问则失效
-        .max_capacity(100) // 减少到100个项目，避免大图片占用过多内存
         .weigher(|_key, value: &Vec<u8>| -> u32 {
             // 限制单个缓存项最大1MB，超过则不缓存到内存
             if value.len() > 1024 * 1024 {
@@ -17,7 +16,7 @@ pub static CACHE_BUCKET: Lazy<Cache<String, Vec<u8>>> = Lazy::new(|| {
                 value.len() as u32
             }
         })
-        .max_capacity(50 * 1024 * 1024) // 最大50MB内存缓存
+        .max_capacity(50 * 1024 * 1024) // 最大50MB内存缓存（按 weigher 权重计算）
         .build()
 });
 
@@ -148,50 +147,22 @@ pub fn get_disk(key: &str) -> Option<Vec<u8>> {
     }
 }
 
-// 获取硬盘缓存统计信息
-fn get_disk_cache_stats() -> (usize, u64) {
-    use std::fs;
-    use std::path::Path;
-    
-    let mut file_count = 0;
-    let mut total_size = 0u64;
-    
-    fn scan_dir(dir: &Path, file_count: &mut usize, total_size: &mut u64) -> std::io::Result<()> {
-        if !dir.exists() {
-            return Ok(());
-        }
-        
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            
-            if path.is_dir() {
-                scan_dir(&path, file_count, total_size)?;
-            } else if path.is_file() {
-                *file_count += 1;
-                if let Ok(metadata) = fs::metadata(&path) {
-                    *total_size += metadata.len();
-                }
-            }
-        }
-        Ok(())
-    }
-    
-    let cache_dir = Path::new(CACHE_DIR);
-    let _ = scan_dir(cache_dir, &mut file_count, &mut total_size);
-    
-    (file_count, total_size)
-}
-
 /// 不由通用清理任务管理的目录（有独立缓存策略）
 const CACHE_EXCLUDED_DIRS: &[&str] = &["friend_avatars"];
 
-// 清理过期的缓存文件
+// 清理过期的缓存文件（统计在清理过程中直接收集，避免额外的目录扫描）
 pub fn cleanup_expired_cache() {
     use std::fs;
     use std::path::Path;
 
-    fn cleanup_dir(dir: &Path) -> std::io::Result<()> {
+    struct CleanupStats {
+        removed_count: usize,
+        removed_size: u64,
+        remaining_count: usize,
+        remaining_size: u64,
+    }
+
+    fn cleanup_dir(dir: &Path, stats: &mut CleanupStats) -> std::io::Result<()> {
         if !dir.exists() {
             return Ok(());
         }
@@ -208,41 +179,52 @@ pub fn cleanup_expired_cache() {
                         continue;
                     }
                 }
-                cleanup_dir(&path)?;
+                cleanup_dir(&path, stats)?;
                 // 尝试删除空目录
                 let _ = fs::remove_dir(&path);
             } else if path.is_file() {
                 if let Ok(metadata) = fs::metadata(&path) {
+                    let file_size = metadata.len();
+                    let mut expired = false;
                     if let Ok(modified) = metadata.modified() {
                         if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
                             if elapsed.as_secs() > IMAGE_CACHE_TTL {
-                                let _ = fs::remove_file(&path);
-                                debug!("Cleaned expired cache file: {:?}", path);
+                                expired = true;
                             }
                         }
+                    }
+                    if expired {
+                        let _ = fs::remove_file(&path);
+                        stats.removed_count += 1;
+                        stats.removed_size += file_size;
+                        debug!("Cleaned expired cache file: {:?}", path);
+                    } else {
+                        stats.remaining_count += 1;
+                        stats.remaining_size += file_size;
                     }
                 }
             }
         }
         Ok(())
     }
-    
+
     let cache_dir = Path::new(CACHE_DIR);
-    let (before_count, before_size) = get_disk_cache_stats();
-    
-    if let Err(e) = cleanup_dir(cache_dir) {
+    let mut stats = CleanupStats {
+        removed_count: 0,
+        removed_size: 0,
+        remaining_count: 0,
+        remaining_size: 0,
+    };
+
+    if let Err(e) = cleanup_dir(cache_dir, &mut stats) {
         error!("Failed to cleanup cache directory: {}", e);
     } else {
-        let (after_count, after_size) = get_disk_cache_stats();
-        let cleaned_count = before_count.saturating_sub(after_count);
-        let cleaned_size = before_size.saturating_sub(after_size);
-        
-        if cleaned_count > 0 {
-            info!("Cache cleanup completed: removed {} files, freed {} bytes", 
-                    cleaned_count, cleaned_size);
+        if stats.removed_count > 0 {
+            info!("Cache cleanup completed: removed {} files, freed {} bytes",
+                    stats.removed_count, stats.removed_size);
         }
-        
-        debug!("Cache stats: {} files, {} bytes total", 
-                after_count, after_size);
+
+        debug!("Cache stats: {} files, {} bytes total",
+                stats.remaining_count, stats.remaining_size);
     }
 }

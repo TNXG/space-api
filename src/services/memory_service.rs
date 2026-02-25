@@ -182,8 +182,8 @@ pub struct MemoryManager {
     performance_stats: Arc<Mutex<PerformanceStats>>,
     /// 启动时间
     start_time: Instant,
-    /// 内存使用历史（用于计算平均值）
-    memory_history: Arc<Mutex<Vec<(Instant, u64)>>>,
+    /// 内存使用历史（用于计算平均值，使用 VecDeque 以便高效移除旧数据）
+    memory_history: Arc<Mutex<std::collections::VecDeque<(Instant, u64)>>>,
     /// 系统内存历史（用于前端图表显示）
     system_memory_history: Arc<Mutex<std::collections::VecDeque<u64>>>,
 }
@@ -206,7 +206,7 @@ impl MemoryManager {
             })),
             performance_stats: Arc::new(Mutex::new(PerformanceStats::default())),
             start_time: Instant::now(),
-            memory_history: Arc::new(Mutex::new(Vec::with_capacity(1000))), // 保留最近1000个记录
+            memory_history: Arc::new(Mutex::new(std::collections::VecDeque::with_capacity(1000))), // 保留最近1000个记录
             system_memory_history: Arc::new(Mutex::new(std::collections::VecDeque::with_capacity(60))), // 保留最近60个数据点
         }
     }
@@ -395,11 +395,11 @@ impl MemoryManager {
         let now = Instant::now();
 
         // 添加新记录
-        history.push((now, memory_mb));
+        history.push_back((now, memory_mb));
 
-        // 保持历史记录在合理大小内（最近1000个记录）
-        if history.len() > 1000 {
-            history.remove(0);
+        // 保持历史记录在合理大小内（最近1000个记录，pop_front 是 O(1)）
+        while history.len() > 1000 {
+            history.pop_front();
         }
 
         // 清理超过1小时的旧记录
@@ -610,18 +610,27 @@ impl MemoryManager {
             }
         }
 
-        // 清理磁盘缓存
-        match std::panic::catch_unwind(|| {
-            cleanup_expired_cache();
-        }) {
-            Ok(_) => {
+        // 清理磁盘缓存（在阻塞线程中执行，避免阻塞 async runtime）
+        match tokio::task::spawn_blocking(|| {
+            std::panic::catch_unwind(|| {
+                cleanup_expired_cache();
+            })
+        })
+        .await
+        {
+            Ok(Ok(_)) => {
                 log::debug!("Disk cache cleanup completed successfully");
             }
-            Err(_) => {
+            Ok(Err(_)) => {
                 log::warn!(
                     "Disk cache cleanup panicked, continuing with memory cache cleanup only"
                 );
-                // 不返回错误，因为内存缓存清理已经成功
+            }
+            Err(e) => {
+                log::warn!(
+                    "Disk cache cleanup task failed: {}, continuing with memory cache cleanup only",
+                    e
+                );
             }
         }
 

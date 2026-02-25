@@ -49,7 +49,7 @@ async fn codetime() -> Result<Json<ApiResponse<Value>>> {
         .await
         .map_err(|e| Error::Internal(format!("parse codetime json failed: {}", e)))?;
 
-    if json.get("error").is_some() && !json.get("error").unwrap().is_null() {
+    if json.get("error").and_then(|v| if v.is_null() { None } else { Some(v) }).is_some() {
         return Ok(ApiResponse::error("500", "codetime service error"));
     }
 

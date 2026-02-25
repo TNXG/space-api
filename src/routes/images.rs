@@ -105,7 +105,7 @@ async fn serve_wallpaper(
                         "message": "Error fetching wallpaper source",
                         "status": "failed"
                     });
-                    let body = serde_json::to_vec(&payload).unwrap();
+                    let body = serde_json::to_vec(&payload).unwrap_or_default();
                     let resp =
                         CustomResponse::new(ContentType::JSON, body, Status::InternalServerError);
                     Ok(resp)

@@ -4,7 +4,7 @@ use crate::utils::custom_response::CustomResponse;
 use crate::{Error, Result};
 use image::ImageFormat;
 use rocket::http::{Accept, ContentType, Status};
-use rocket::{get, routes, Route};
+use rocket::{get, routes, Route, State};
 
 // 简单的 Accept 协商：按优先级 avif > webp > png > jpeg
 fn negotiate_format(accept: &str) -> (&'static str, ImageFormat, ContentType) {
@@ -34,6 +34,7 @@ async fn get_avatar(
     s: Option<&str>,
     source: Option<&str>,
     accept: &Accept,
+    image_service: &State<ImageService>,
 ) -> Result<CustomResponse> {
     let src = s.or(source).unwrap_or("default");
     let accept_str = accept.to_string();
@@ -57,8 +58,7 @@ async fn get_avatar(
             .with_cache(true));
     }
 
-    // 下载原始头像图像（使用专门的头像缓存策略）
-    let image_service = ImageService::new();
+    // 下载原始头像图像（复用托管的 ImageService，避免每次请求创建新 reqwest::Client）
     let (raw_bytes, origin_cache_hit) = image_service.fetch_avatar(origin_url).await?;
     let img = image::load_from_memory(&raw_bytes)
         .map_err(|e| Error::Internal(format!("Failed to decode avatar: {}", e)))?;

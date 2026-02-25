@@ -35,6 +35,9 @@ pub struct OAuthConfig {
     pub qq_app_id: String,
     pub qq_app_key: String,
     pub redirect_uri: String,
+    /// 允许的 return_url 域名白名单（为空则允许所有，但生产环境建议配置）
+    #[serde(default)]
+    pub allowed_return_domains: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

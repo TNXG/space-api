@@ -50,14 +50,35 @@ async fn qq_callback(
     let oauth_service = OAuthService::new(config.oauth.clone());
 
     // 解析 state，提取 return_url 与 original_state
-    let mut return_url = std::env::var("DEFAULT_RETURN_URL")
+    let default_return_url = std::env::var("DEFAULT_RETURN_URL")
         .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let mut return_url = default_return_url.clone();
     let mut original_state: Option<String> = None;
     if let Some(s) = state {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(s) {
             if let Some(r) = v.get("return_url").and_then(|x| x.as_str()) {
                 if !r.is_empty() {
-                    return_url = r.to_string();
+                    // Open Redirect 防护：校验 return_url 域名
+                    let allowed = &config.oauth.allowed_return_domains;
+                    if allowed.is_empty() {
+                        // 未配置白名单时允许所有（向后兼容）
+                        return_url = r.to_string();
+                    } else if let Ok(parsed) = Url::parse(r) {
+                        if let Some(host) = parsed.host_str() {
+                            let lower_host = host.to_ascii_lowercase();
+                            if allowed.iter().any(|d| {
+                                let d = d.to_ascii_lowercase();
+                                lower_host == d || lower_host.ends_with(&format!(".{}", d))
+                            }) {
+                                return_url = r.to_string();
+                            } else {
+                                log::warn!(
+                                    "OAuth return_url rejected (domain not in whitelist): {}",
+                                    r
+                                );
+                            }
+                        }
+                    }
                 }
             }
             if let Some(os) = v.get("original_state").and_then(|x| x.as_str()) {
@@ -130,7 +151,9 @@ async fn qq_callback(
         let _ = db_service::insert_one("temp_codes", temp_doc).await?;
 
         // 构建成功重定向
-        let mut url = Url::parse(&return_url).unwrap_or_else(|_| Url::parse("http://localhost:3000").unwrap());
+        let mut url = Url::parse(&return_url)
+            .or_else(|_| Url::parse(&default_return_url))
+            .unwrap_or_else(|_| Url::parse("http://localhost:3000").expect("hardcoded URL is valid"));
         {
             let mut qp = url.query_pairs_mut();
             qp.append_pair("code", &temp_code);
@@ -145,7 +168,9 @@ async fn qq_callback(
         Ok(url) => Ok(Redirect::to(url.to_string())),
         Err(e) => {
             // 构建错误重定向
-            let mut url = Url::parse(&return_url).unwrap_or_else(|_| Url::parse("http://localhost:3000").unwrap());
+            let mut url = Url::parse(&return_url)
+                .or_else(|_| Url::parse(&default_return_url))
+                .unwrap_or_else(|_| Url::parse("http://localhost:3000").expect("hardcoded URL is valid"));
             {
                 let mut qp = url.query_pairs_mut();
                 qp.append_pair("error", "oauth_failed");

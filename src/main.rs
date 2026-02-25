@@ -62,12 +62,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.memory.threshold_mb, config.memory.check_interval_secs
     );
 
-    // 启动缓存清理后台任务
+    // 启动缓存清理后台任务（在阻塞线程中执行，避免阻塞 async runtime）
     tokio::spawn(async {
         let mut interval = tokio::time::interval(Duration::from_secs(60 * 30)); // 每30分钟清理一次
         loop {
             interval.tick().await;
-            cache::cleanup_expired_cache();
+            let _ = tokio::task::spawn_blocking(|| cache::cleanup_expired_cache()).await;
         }
     });
 

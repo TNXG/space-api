@@ -20,8 +20,22 @@ pub struct VerifyEmailRequest {
 // 发送邮件路由
 #[post("/send", data = "<data>")]
 async fn send_email(data: Json<SendEmailRequest>, config: &State<Config>) -> Result<Json<ApiResponse<String>>> {
-    // 验证邮箱格式
-    if !data.email.contains('@') || !data.email.contains('.') {
+    // 验证邮箱格式（基础 RFC 5321 检查）
+    let email = data.email.trim();
+    let is_valid_email = {
+        let parts: Vec<&str> = email.splitn(2, '@').collect();
+        parts.len() == 2
+            && !parts[0].is_empty()
+            && parts[0].len() <= 64
+            && !parts[1].is_empty()
+            && parts[1].contains('.')
+            && parts[1].len() <= 255
+            && !parts[1].starts_with('.')
+            && !parts[1].ends_with('.')
+            && !parts[0].contains(' ')
+            && !parts[1].contains(' ')
+    };
+    if !is_valid_email {
         return Err(Error::BadRequest("Invalid email format".to_string()));
     }
     

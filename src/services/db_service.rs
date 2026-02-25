@@ -62,7 +62,7 @@ pub async fn initialize_db(config: &MongoConfig) -> Result<Client> {
     let db_arc = Arc::new(Mutex::new(database));
     DB_INSTANCE
         .set(db_arc)
-        .expect("Failed to set database instance");
+        .map_err(|_| Error::Database("Database instance already set".to_string()))?;
 
     Ok(client)
 }
@@ -181,12 +181,12 @@ fn normalize_document_dates(doc: Document) -> Document {
                                     }
                                 }
                             }
-                            // 如果无法解析，递归处理 inner_doc
-                            let mut new_inner = inner_doc.clone();
-                            for (k, v) in inner_doc.iter() {
-                                new_inner.insert(k.clone(), normalize_bson(v.clone()));
+                            // 如果无法解析，递归处理 inner_doc（消费 d 避免多余 clone）
+                            let mut new_doc = Document::new();
+                            for (k, v) in d.into_iter() {
+                                new_doc.insert(k, normalize_bson(v));
                             }
-                            return Bson::Document(new_inner);
+                            return Bson::Document(new_doc);
                         }
                         Bson::Int64(ms) => {
                             if let Some(dt) = chrono::DateTime::<Utc>::from_timestamp_millis(*ms) {
@@ -212,7 +212,7 @@ fn normalize_document_dates(doc: Document) -> Document {
                     }
                 }
 
-                // 否则递归处理子文档
+                // 否则递归处理子文档（into_iter 消费 d，避免 clone）
                 let mut new_doc = Document::new();
                 for (k, v) in d.into_iter() {
                     new_doc.insert(k, normalize_bson(v));

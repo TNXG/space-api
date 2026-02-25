@@ -54,15 +54,20 @@ impl ImageService {
         let encoded_len = encoded_bytes.len();
         debug!("Wallpaper encoded: {} -> {} bytes ({})", raw_len, encoded_len, format_ext);
         
-        // 6. 异步写入硬盘缓存（编码后的数据）
-        let cache_key_clone = cache_key.clone();
-        let bytes_for_cache = encoded_bytes.clone();
-        tokio::task::spawn_blocking(move || {
-            cache::put_disk(&cache_key_clone, &bytes_for_cache);
-            // bytes_for_cache 在这里释放
-        });
-        
-        // 7. 返回编码后的数据
+        // 6. 异步写入硬盘缓存（编码后的数据，使用 Arc 避免深拷贝）
+        let bytes_arc = std::sync::Arc::new(encoded_bytes);
+        {
+            let cache_key_clone = cache_key;
+            let bytes_for_cache = std::sync::Arc::clone(&bytes_arc);
+            tokio::task::spawn_blocking(move || {
+                cache::put_disk(&cache_key_clone, &bytes_for_cache);
+                // bytes_for_cache 在这里引用计数 -1
+            });
+        }
+
+        // 7. 返回编码后的数据（通过 Arc::try_unwrap 避免额外 clone）
+        let encoded_bytes = std::sync::Arc::try_unwrap(bytes_arc)
+            .unwrap_or_else(|arc| (*arc).clone());
         Ok((encoded_bytes, format))
     }
 
@@ -200,10 +205,10 @@ impl ImageService {
         // 2. 硬盘缓存
         if let Some(cached) = cache::get_disk(url) {
             let len = cached.len();
-            // 小于 512KB 提升到内存
+            // 小于 512KB 提升到内存（直接 move 进 spawn，避免 clone）
             if len < 512 * 1024 {
                 let key = memory_cache_key.clone();
-                let data = cached.clone();
+                let data = cached.clone(); // 需要 clone 一份给内存缓存
                 tokio::spawn(async move {
                     cache::put(&cache::CACHE_BUCKET, key, data).await;
                 });
@@ -216,16 +221,22 @@ impl ImageService {
         let bytes = self.download_image(url).await?;
         let len = bytes.len();
 
-        // 4. 写入缓存
-        let url_clone = url.to_string();
-        let bytes_for_disk = bytes.clone();
-        tokio::task::spawn_blocking(move || {
-            cache::put_disk(&url_clone, &bytes_for_disk);
-        });
+        // 4. 写入缓存（使用 Arc 共享数据避免多次深拷贝）
+        let bytes_arc = std::sync::Arc::new(bytes);
+        {
+            let url_clone = url.to_string();
+            let bytes_for_disk = std::sync::Arc::clone(&bytes_arc);
+            tokio::task::spawn_blocking(move || {
+                cache::put_disk(&url_clone, &bytes_for_disk);
+            });
+        }
 
         if len < 512 * 1024 {
-            cache::put(&cache::CACHE_BUCKET, memory_cache_key, bytes.clone()).await;
+            cache::put(&cache::CACHE_BUCKET, memory_cache_key, (*bytes_arc).clone()).await;
         }
+
+        let bytes = std::sync::Arc::try_unwrap(bytes_arc)
+            .unwrap_or_else(|arc| (*arc).clone());
 
         info!("Avatar downloaded: {} bytes", len);
         Ok((bytes, false))

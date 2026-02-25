@@ -4,6 +4,7 @@ use image::ImageFormat;
 use log::{debug, error, info};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -27,12 +28,17 @@ struct AvatarMetadata {
     format: String,
 }
 
+/// 获取当前时间戳（秒），系统时钟异常时回退到 0
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_secs()
+}
+
 impl AvatarMetadata {
     fn new(url: String, format: String) -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = now_secs();
 
         Self {
             url,
@@ -46,28 +52,19 @@ impl AvatarMetadata {
 
     /// 检查缓存是否新鲜（2小时内）
     fn is_fresh(&self) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        now - self.last_check_time < 2 * 60 * 60 // 2小时
+        let now = now_secs();
+        now.saturating_sub(self.last_check_time) < 2 * 60 * 60 // 2小时
     }
 
     /// 检查缓存是否过期（30天）
     fn is_expired(&self) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        now - self.last_success_time > 30 * 24 * 60 * 60 // 30天
+        let now = now_secs();
+        now.saturating_sub(self.last_success_time) > 30 * 24 * 60 * 60 // 30天
     }
 
     /// 标记为成功
     fn mark_success(&mut self) {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = now_secs();
         self.last_success_time = now;
         self.last_check_time = now;
         self.fail_count = 0;
@@ -76,10 +73,7 @@ impl AvatarMetadata {
 
     /// 标记为失败
     fn mark_failure(&mut self) {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = now_secs();
         self.last_check_time = now;
         self.fail_count += 1;
 
@@ -103,7 +97,7 @@ impl FriendAvatarService {
             client: Client::builder()
                 .timeout(Duration::from_secs(10))
                 .build()
-                .unwrap(),
+                .expect("Failed to create HTTP client for FriendAvatarService"),
             cache_dir: PathBuf::from("cache/friend_avatars"),
             updating: Arc::new(RwLock::new(std::collections::HashSet::new())),
         }
@@ -296,8 +290,11 @@ impl FriendAvatarService {
         Ok(())
     }
 
-    /// 下载原始图片
+    /// 下载原始图片（包含 SSRF 防护）
     async fn download_image(&self, url: &str) -> Result<Vec<u8>> {
+        // SSRF 防护：校验 URL 安全性
+        Self::validate_url(url)?;
+
         debug!("[友链头像] 正在请求: {}", url);
         
         let response = self
@@ -403,6 +400,65 @@ impl FriendAvatarService {
         } else {
             ImageFormat::Jpeg
         }
+    }
+
+    /// SSRF 防护：校验 URL 是否安全
+    fn validate_url(url: &str) -> Result<()> {
+        let parsed = url::Url::parse(url)
+            .map_err(|_| Error::BadRequest(format!("Invalid URL: {}", url)))?;
+
+        // 仅允许 http/https 协议
+        match parsed.scheme() {
+            "http" | "https" => {}
+            scheme => {
+                return Err(Error::BadRequest(format!(
+                    "Unsupported URL scheme: {}",
+                    scheme
+                )));
+            }
+        }
+
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| Error::BadRequest("URL missing host".to_string()))?;
+
+        // 拒绝 localhost 和常见本地别名
+        let lower_host = host.to_ascii_lowercase();
+        if lower_host == "localhost"
+            || lower_host == "127.0.0.1"
+            || lower_host == "[::1]"
+            || lower_host == "0.0.0.0"
+            || lower_host.ends_with(".local")
+            || lower_host.ends_with(".internal")
+        {
+            return Err(Error::BadRequest(
+                "Access to local addresses is not allowed".to_string(),
+            ));
+        }
+
+        // 拒绝私有/保留 IP 地址
+        if let Ok(ip) = host.parse::<IpAddr>() {
+            let is_private = match ip {
+                IpAddr::V4(v4) => {
+                    v4.is_loopback()               // 127.0.0.0/8
+                        || v4.is_private()          // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+                        || v4.is_link_local()       // 169.254.0.0/16 (包括云元数据端点)
+                        || v4.is_broadcast()
+                        || v4.is_unspecified()
+                        || v4.octets()[0] == 100 && (v4.octets()[1] & 0xC0) == 64  // 100.64.0.0/10 (CGNAT)
+                }
+                IpAddr::V6(v6) => {
+                    v6.is_loopback() || v6.is_unspecified()
+                }
+            };
+            if is_private {
+                return Err(Error::BadRequest(
+                    "Access to private/reserved IP addresses is not allowed".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     /// 克隆用于后台任务（共享 updating 集合）
