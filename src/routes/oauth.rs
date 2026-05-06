@@ -66,10 +66,16 @@ async fn qq_callback(
                     } else if let Ok(parsed) = Url::parse(r) {
                         if let Some(host) = parsed.host_str() {
                             let lower_host = host.to_ascii_lowercase();
-                            if allowed.iter().any(|d| {
+                            // localhost（任意端口）默认允许，用于本地调试
+                            let is_localhost = lower_host == "localhost"
+                                || lower_host == "127.0.0.1"
+                                || lower_host == "::1";
+                            let is_in_whitelist = allowed.iter().any(|d| {
                                 let d = d.to_ascii_lowercase();
                                 lower_host == d || lower_host.ends_with(&format!(".{}", d))
-                            }) {
+                            });
+
+                            if is_localhost || is_in_whitelist {
                                 return_url = r.to_string();
                             } else {
                                 log::warn!(
