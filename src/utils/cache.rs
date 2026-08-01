@@ -148,7 +148,7 @@ pub fn get_disk(key: &str) -> Option<Vec<u8>> {
 }
 
 /// 不由通用清理任务管理的目录（有独立缓存策略）
-const CACHE_EXCLUDED_DIRS: &[&str] = &["friend_avatars"];
+const CACHE_EXCLUDED_DIRS: &[&str] = &["image_proxy"];
 
 // 清理过期的缓存文件（统计在清理过程中直接收集，避免额外的目录扫描）
 pub fn cleanup_expired_cache() {

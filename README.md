@@ -109,6 +109,11 @@ space-api/
     qq_app_id = "your_qq_app_id"
     qq_app_key = "your_qq_app_key"
     redirect_uri = "https://your-domain.com/oauth/qq/callback"
+
+    [image_proxy]
+    allowed_referrer_domains = ["tnxg.moe", "tnxg.top"]
+    allow_missing_referrer = false
+    max_image_bytes = 10485760
     
     [memory]
     threshold_mb = 500
@@ -167,6 +172,11 @@ qq_app_id = "your_qq_app_id"                # QQ 登录 AppID
 qq_app_key = "your_qq_app_key"              # QQ 登录 AppKey
 redirect_uri = "https://your-domain.com/oauth/qq/callback"  # 回调地址
 
+[image_proxy]
+allowed_referrer_domains = ["tnxg.moe", "tnxg.top"] # 防盗链白名单，自动允许子域名
+allow_missing_referrer = false                 # 是否允许缺少来源头的请求
+max_image_bytes = 10485760                     # 单张源图最大 10 MiB
+
 [memory]
 threshold_mb = 500              # 内存阈值（MB），超过此值触发全局内存释放
 check_interval_secs = 30        # 内存检查间隔（秒），设置过小会增加 CPU 负担
@@ -214,6 +224,7 @@ Space API 集成了智能内存管理系统，具备以下特性：
 | **Avatar** | `/avatar` | 头像上传与获取 |
 | **Email** | `/email` | 邮件发送服务 |
 | **Images** | `/images` | 图片管理接口 |
+| **Image Proxy** | `/images/proxy` | 带缓存、格式协商与防盗链的通用图像代理 |
 | **Links** | `/links` | 友链/链接管理 |
 | **OAuth** | `/oauth` | 第三方登录回调处理 |
 | **Status** | `/status` | 系统运行状态检查 |

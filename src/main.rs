@@ -5,7 +5,7 @@ use space_api_rs::config;
 use space_api_rs::routes;
 use space_api_rs::routes::index::MetricsHistory;
 use space_api_rs::services::db_service;
-use space_api_rs::services::friend_avatar_service::FriendAvatarService;
+use space_api_rs::services::image_proxy_service::ImageProxyService;
 use space_api_rs::services::image_service::ImageService;
 use space_api_rs::services::memory_service::MemoryManager;
 use space_api_rs::utils::cache;
@@ -80,6 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let figment = rocket::Config::figment().merge(("template_dir", "src/templates"));
+    let image_proxy_service = ImageProxyService::new(config.image_proxy.max_image_bytes);
 
     // 使用 custom(figment) 替代 build()
     let rocket = rocket::custom(figment)
@@ -88,7 +89,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .mount("/", routes::index::routes())
         .mount("/avatar", routes::avatar::routes())
         .mount("/email", routes::email::routes())
-        .mount("/friend-avatar", routes::friend_avatar::routes())
         .mount("/images", routes::images::routes())
         .mount("/oauth", routes::oauth::routes())
         .mount("/status", routes::status::routes())
@@ -99,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(MetricsHistory::new())
         .manage(routes::index::SystemState::new())
         .manage(ImageService::new())
-        .manage(FriendAvatarService::new())
+        .manage(image_proxy_service)
         .manage(memory_manager);
 
     // 从Cargo.toml获取版本号

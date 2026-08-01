@@ -8,6 +8,8 @@ pub struct Config {
     pub email: EmailConfig,
     pub oauth: OAuthConfig,
     #[serde(default)]
+    pub image_proxy: ImageProxyConfig,
+    #[serde(default)]
     pub memory: MemoryConfig,
 }
 
@@ -38,6 +40,37 @@ pub struct OAuthConfig {
     /// 允许的 return_url 域名白名单（为空则允许所有，但生产环境建议配置）
     #[serde(default)]
     pub allowed_return_domains: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImageProxyConfig {
+    /// 允许调用图像代理的来源域名，自动包含其子域名
+    #[serde(default = "default_image_proxy_referrer_domains")]
+    pub allowed_referrer_domains: Vec<String>,
+    /// 是否允许不携带 Origin/Referer 的请求
+    #[serde(default)]
+    pub allow_missing_referrer: bool,
+    /// 单张源图允许下载的最大字节数
+    #[serde(default = "default_image_proxy_max_bytes")]
+    pub max_image_bytes: usize,
+}
+
+impl Default for ImageProxyConfig {
+    fn default() -> Self {
+        Self {
+            allowed_referrer_domains: default_image_proxy_referrer_domains(),
+            allow_missing_referrer: false,
+            max_image_bytes: default_image_proxy_max_bytes(),
+        }
+    }
+}
+
+fn default_image_proxy_referrer_domains() -> Vec<String> {
+    vec!["tnxg.moe".to_string(), "tnxg.top".to_string()]
+}
+
+fn default_image_proxy_max_bytes() -> usize {
+    10 * 1024 * 1024
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

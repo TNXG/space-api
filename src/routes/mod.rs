@@ -1,6 +1,5 @@
 pub mod avatar;
 pub mod email;
-pub mod friend_avatar;
 pub mod images;
 pub mod index;
 pub mod oauth;

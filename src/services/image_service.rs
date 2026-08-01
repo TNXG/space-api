@@ -127,6 +127,7 @@ impl ImageService {
             ImageFormat::Avif => "avif",
             ImageFormat::WebP => "webp",
             ImageFormat::Png => "png",
+            ImageFormat::Gif => "gif",
             _ => "jpeg",
         }
     }
