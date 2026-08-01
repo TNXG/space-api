@@ -80,6 +80,8 @@ impl<'r> FromRequest<'r> for ImageProxyRequestSource {
 
 /// 校验调用方来源，域名白名单会自动匹配任意层级子域名。
 fn validate_image_proxy_source(source: Option<&str>, config: &Config) -> Result<()> {
+    // 部分代理会保留 Referer 头但传入空值，因此应与完全缺少该请求头使用同一配置策略。
+    let source = source.map(str::trim).filter(|source| !source.is_empty());
     let Some(source) = source else {
         return if config.image_proxy.allow_missing_referrer {
             Ok(())
@@ -338,5 +340,29 @@ mod tests {
 
         assert!(validate_image_proxy_source(Some("https://example.com"), &config).is_err());
         assert!(validate_image_proxy_source(None, &config).is_err());
+        assert!(validate_image_proxy_source(Some(""), &config).is_err());
+    }
+
+    #[test]
+    fn allows_configured_localhost_with_any_port() {
+        let config = config_with_image_proxy(ImageProxyConfig {
+            allowed_referrer_domains: vec!["Localhost".to_string()],
+            ..ImageProxyConfig::default()
+        });
+
+        assert!(validate_image_proxy_source(Some("http://localhost:3000/page"), &config).is_ok());
+        assert!(validate_image_proxy_source(Some("https://LOCALHOST:5173"), &config).is_ok());
+    }
+
+    #[test]
+    fn allows_empty_referrer_when_missing_referrer_is_enabled() {
+        let config = config_with_image_proxy(ImageProxyConfig {
+            allow_missing_referrer: true,
+            ..ImageProxyConfig::default()
+        });
+
+        assert!(validate_image_proxy_source(None, &config).is_ok());
+        assert!(validate_image_proxy_source(Some(""), &config).is_ok());
+        assert!(validate_image_proxy_source(Some("   "), &config).is_ok());
     }
 }
