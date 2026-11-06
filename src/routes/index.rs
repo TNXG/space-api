@@ -39,12 +39,10 @@ pub struct SystemState {
 }
 
 impl SystemState {
-    pub fn new() -> Self {
-        let mut sys = System::new_all();
-        sys.refresh_all();
-        Self {
-            system: Arc::new(Mutex::new(sys)),
-        }
+    pub fn new() -> Result<Self, sysinfo::Error> {
+        Ok(Self {
+            system: Arc::new(Mutex::new(System::new_all()?)),
+        })
     }
 }
 
@@ -179,9 +177,9 @@ pub async fn index(
         let sys_kernel = System::kernel_version().unwrap_or("Unknown".to_string());
         let sys_hostname = System::host_name().unwrap_or("Unknown".to_string());
         
-        let avg_load = System::load_average();
-        let uptime_sec = System::uptime();
-        let boot_time_sec = System::boot_time();
+        let avg_load = System::load_average().unwrap_or_default();
+        let uptime_sec = System::uptime().unwrap_or_default();
+        let boot_time_sec = System::boot_time().unwrap_or_default();
         
         let total_system_mem = sys.total_memory();
         

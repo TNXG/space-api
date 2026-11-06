@@ -97,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(config)
         .manage(mongo_client)
         .manage(MetricsHistory::new())
-        .manage(routes::index::SystemState::new())
+        .manage(routes::index::SystemState::new()?)
         .manage(ImageService::new())
         .manage(image_proxy_service)
         .manage(memory_manager);

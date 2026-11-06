@@ -654,7 +654,7 @@ impl ImageProxyService {
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(url.as_bytes());
-        let hash = format!("{:x}", hasher.finalize());
+        let hash = hex::encode(hasher.finalize());
         format!("{}_{}", &hash[..16], format)
     }
 

@@ -236,7 +236,9 @@ impl MemoryManager {
         match tokio::task::spawn_blocking(move || {
             use sysinfo::{Pid, ProcessesToUpdate, System};
 
-            let mut sys = System::new();
+            let mut sys = System::new().map_err(|e| {
+                MemoryError::MetricsCollectionFailed(format!("系统信息初始化失败: {e}"))
+            })?;
             let current_pid = Pid::from(std::process::id() as usize);
 
             // 使用正确的API刷新进程信息

@@ -76,7 +76,7 @@ fn get_cache_path(key: &str) -> PathBuf {
     // 使用SHA256哈希，更安全且避免特殊字符
     let mut hasher = Sha256::new();
     hasher.update(key.as_bytes());
-    let hash = format!("{:x}", hasher.finalize());
+    let hash = hex::encode(hasher.finalize());
     
     // 创建两级目录结构，避免单个目录文件过多
     let (dir1, dir2) = hash.split_at(2);
