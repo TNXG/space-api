@@ -16,59 +16,18 @@ impl ImageService {
         }
     }
 
-    /// 壁纸服务：按格式缓存编码后的图片
-    /// 
-    /// 缓存策略：
-    /// - 缓存 key = url + format (如 avif/webp/jpeg)
-    /// - 有缓存：直接返回编码后的数据，无需任何处理
-    /// - 无缓存：下载原图 -> 编码为目标格式 -> 缓存编码结果 -> 返回
-    /// 
-    /// 这样避免了重复的图片解码/编码操作，大幅降低内存占用
-    pub async fn fetch_wallpaper(&self, url: &str, accept_header: &str) -> Result<(Vec<u8>, ImageFormat)> {
-        // 1. 确定目标格式：avif > webp > jpeg
-        let format = self.get_preferred_format(accept_header);
-        let format_ext = Self::format_extension(format);
-        
-        // 2. 缓存 key = url + format
-        let cache_key = format!("{}:{}", url, format_ext);
-        
-        // 3. 检查硬盘缓存（编码后的数据）
-        if let Some(cached_data) = cache::get_disk(&cache_key) {
-            debug!("Wallpaper cache hit: {} ({} bytes)", format_ext, cached_data.len());
-            return Ok((cached_data, format));
+    /// 获取上游响应头后立即返回，调用方流式转发响应体，不解码或重编码。
+    pub async fn open_wallpaper(&self, url: &str) -> Result<reqwest::Response> {
+        let response = self.client.get(url)
+            .header(reqwest::header::ACCEPT_ENCODING, "identity")
+            .send().await
+            .map_err(|e| Error::Internal(format!("Failed to fetch wallpaper: {e}")))?;
+        if !response.status().is_success() {
+            return Err(Error::Internal(format!(
+                "Wallpaper upstream returned HTTP {}", response.status()
+            )));
         }
-        
-        // 4. 无缓存：下载原图
-        info!("Wallpaper cache miss, downloading: {}", url);
-        let raw_bytes = self.download_image(url).await?;
-        let raw_len = raw_bytes.len();
-        
-        // 5. 在阻塞线程中处理图片（解码+编码），避免阻塞 async runtime
-        let encoded_bytes = tokio::task::spawn_blocking(move || {
-            Self::encode_image_blocking(&raw_bytes, format)
-            // raw_bytes 在这里被消费并释放
-        })
-        .await
-        .map_err(|e| Error::Internal(format!("Task join error: {}", e)))??;
-        
-        let encoded_len = encoded_bytes.len();
-        debug!("Wallpaper encoded: {} -> {} bytes ({})", raw_len, encoded_len, format_ext);
-        
-        // 6. 异步写入硬盘缓存（编码后的数据，使用 Arc 避免深拷贝）
-        let bytes_arc = std::sync::Arc::new(encoded_bytes);
-        {
-            let cache_key_clone = cache_key;
-            let bytes_for_cache = std::sync::Arc::clone(&bytes_arc);
-            tokio::task::spawn_blocking(move || {
-                cache::put_disk(&cache_key_clone, &bytes_for_cache);
-                // bytes_for_cache 在这里引用计数 -1
-            });
-        }
-
-        // 7. 返回编码后的数据（通过 Arc::try_unwrap 避免额外 clone）
-        let encoded_bytes = std::sync::Arc::try_unwrap(bytes_arc)
-            .unwrap_or_else(|arc| (*arc).clone());
-        Ok((encoded_bytes, format))
+        Ok(response)
     }
 
     /// 下载原始图片
@@ -110,16 +69,6 @@ impl ImageService {
         Ok(output)
     }
 
-    /// 根据 Accept 头确定最佳格式：avif > webp > jpeg
-    pub fn get_preferred_format(&self, accept_header: &str) -> ImageFormat {
-        if accept_header.contains("image/avif") {
-            ImageFormat::Avif
-        } else if accept_header.contains("image/webp") {
-            ImageFormat::WebP
-        } else {
-            ImageFormat::Jpeg
-        }
-    }
 
     /// 格式扩展名
     pub fn format_extension(format: ImageFormat) -> &'static str {
@@ -243,3 +192,6 @@ impl ImageService {
         Ok((bytes, false))
     }
 }
+
+#[cfg(test)]
+include!("../../tests/unit/image_service.rs");

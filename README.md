@@ -229,6 +229,51 @@ Space API 集成了智能内存管理系统，具备以下特性：
 | **OAuth** | `/oauth` | 第三方登录回调处理 |
 | **Status** | `/status` | 系统运行状态检查 |
 
+### 随机壁纸
+
+`GET /images/wallpaper`（横图）、`GET /images/wallpaper_height`（竖图）共享以下参数：
+
+| 参数 | 可选值 | 默认 |
+| :--- | :--- | :--- |
+| `mode` / `m` | `proxy` / `p`、`redirect` / `r`、`json` / `j` | `proxy` |
+| `source` / `s` | `cdn` / `c`、`cdcn` / `cn` | `cdn` |
+| `format` / `f` | `original` / `o`、`jxl` / `j` | `original` |
+
+- `proxy` 从所选域名原样流式转发，使用有界缓冲提供背压，不等待整图下载、不重编码。
+- `redirect` 返回 302；`source=cdn` 使用 `cdn.tnxg.top`，`source=cdcn` 使用 `cdcn.tnxg.top`。
+- `format=jxl` 选择同目录、同主名的 `.jxl` 旁路文件；原图保留实际扩展名。上游必须已部署对应文件。
+- `json` 一次随机选取一条 blurhash 索引记录，始终返回 `filename`（不含扩展名）、`blurhash`、`original.cdn`、`original.cdcn`、`jxl.cdn`、`jxl.cdcn`。合法的 `source`、`format` 不会裁剪 JSON 字段。
+- 不根据 `Accept` 自动切换格式。无效参数返回 400；上游获取失败返回错误，不自动切换来源。
+- 随机结果响应使用 `Cache-Control: no-store`，防止随机结果被缓存固定。
+
+兼容旧参数：未提供 `mode` 时，`type=cdn` 等价于 `mode=redirect`，`type=json` 等价于 `mode=json`。
+`type=json` 额外保留 `data.image`（CDN 原图地址），已有 `data.blurhash` 不变。旧 `t=cdn/json` 别名同样保留，`type` 优先于 `t`。
+优先级为 `mode` > `m` > `type` > `t`；`source` 优先于 `s`，`format` 优先于 `f`。
+长短参数和值可混用；长参数显式传入非法值仍返回 400，不会尝试短参数回退。
+
+示例：
+
+```text
+/images/wallpaper?mode=json
+/images/wallpaper?mode=redirect&source=cdcn&format=jxl
+/images/wallpaper_height?mode=proxy&source=cdn&format=jxl
+/images/wallpaper?type=cdn
+/images/wallpaper?m=j
+/images/wallpaper?m=r&s=cn&f=jxl
+```
+
+### 模块和测试布局
+
+生产模块按职责拆分：`routes/images/wallpaper.rs` 负责随机壁纸，
+`services/image_proxy_service/` 负责图像代理的下载、缓存和请求策略，
+`services/memory_service/` 负责内存模型、采集、监控、释放和报告，
+`routes/index/` 与 `routes/status/` 存放拆分后的端点。
+
+全部测试实现位于 `tests/`：`tests/wallpaper_routes.rs` 覆盖 HTTP 参数契约，
+`tests/unit/` 存放单元测试。源码仅保留 `#[cfg(test)]` 的模块引用，
+保持私有接口可测试而不扩大生产 API 的可见性。运行 `cargo test` 执行全部测试。
+
+
 ## 📄 开源协议
 
 本项目采用 **GNU Affero General Public License v3.0 (AGPL-3.0)** 协议开源。
