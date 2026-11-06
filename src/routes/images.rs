@@ -30,9 +30,38 @@ static BLURHASH: Lazy<BlurhashData> = Lazy::new(|| {
     })
 });
 
-static MAX_WEIGHT_NUM: Lazy<u32> = Lazy::new(|| get_max_id(&BLURHASH.weight));
+/// 壁纸索引：启动时把 blurhash.json 的键名收成有序表，随机选取直接基于键名。
+type WallpaperEntries = Vec<(String, String)>;
 
-static MAX_HEIGHT_NUM: Lazy<u32> = Lazy::new(|| get_max_id(&BLURHASH.height));
+fn index_entries(map: &HashMap<String, String>) -> WallpaperEntries {
+    map.iter()
+        .map(|(filename, hash)| (filename.clone(), hash.clone()))
+        .collect()
+}
+
+static WEIGHT_ENTRIES: Lazy<WallpaperEntries> = Lazy::new(|| index_entries(&BLURHASH.weight));
+
+static HEIGHT_ENTRIES: Lazy<WallpaperEntries> = Lazy::new(|| index_entries(&BLURHASH.height));
+
+/// 直接从操作系统熵源取字节做无偏抽样，不依赖任何进程内 PRNG 状态。
+///
+/// 用 64 位拒绝采样消除取模偏差：只接受落在 `bound` 整数倍区间内的值。
+fn random_index(len: usize) -> Result<usize> {
+    if len == 0 {
+        return Err(Error::Internal("壁纸索引为空".to_string()));
+    }
+    let bound = len as u64;
+    let zone = u64::MAX - (u64::MAX % bound);
+    loop {
+        let mut bytes = [0u8; 8];
+        getrandom::fill(&mut bytes)
+            .map_err(|e| Error::Internal(format!("操作系统熵源不可用: {e}")))?;
+        let value = u64::from_le_bytes(bytes);
+        if value < zone {
+            return Ok((value % bound) as usize);
+        }
+    }
+}
 
 struct ImageProxyRequestSource(Option<String>);
 
@@ -120,11 +149,11 @@ fn validate_image_proxy_source(source: Option<&str>, config: &Config) -> Result<
     }
 }
 
-fn get_max_id(map: &HashMap<String, String>) -> u32 {
-    map.keys()
-        .filter_map(|k| k.split('.').next().and_then(|n| n.parse::<u32>().ok()))
-        .max()
-        .unwrap_or(1)
+/// 随机取一条 `(文件名, blurhash)`，二者来自同一记录，天然对应。
+fn pick_entry(entries: &WallpaperEntries) -> Result<&(String, String)> {
+    entries
+        .get(random_index(entries.len())?)
+        .ok_or_else(|| Error::Internal("壁纸索引越界".to_string()))
 }
 
 async fn serve_wallpaper(
@@ -132,16 +161,13 @@ async fn serve_wallpaper(
     r#type: Option<String>,
     accept: &Accept,
     service: &State<ImageService>,
-    map: &HashMap<String, String>,
-    max_num: u32,
+    entries: &WallpaperEntries,
     url_prefix: &str,
 ) -> Result<CustomResponse> {
     let req_type = r#type.or(t);
 
-    let image_id = rand::random_range(1..=max_num);
-    let image_id_str = image_id.to_string();
-    let filename = format!("{}.jpg", image_id_str);
-
+    // 随机的是索引位置，文件名与 blurhash 取自同一条键记录，二者必然对应。
+    let (filename, blurhash) = pick_entry(entries)?;
     let cdn_url = format!("{}/{}", url_prefix, filename);
 
     match req_type.as_deref() {
@@ -154,8 +180,6 @@ async fn serve_wallpaper(
         }
         Some("json") => {
             // JSON 返回
-            let blurhash = map.get(&filename).cloned().unwrap_or_default();
-
             let payload = json!({
                 "code": "200",
                 "status": "success",
@@ -218,8 +242,7 @@ async fn wallpaper(
         r#type,
         accept,
         service,
-        &BLURHASH.weight,
-        *MAX_WEIGHT_NUM,
+        &WEIGHT_ENTRIES,
         "https://cdn.tnxg.top/images/wallpaper",
     )
     .await
@@ -237,9 +260,8 @@ async fn wallpaper_height(
         r#type,
         accept,
         service,
-        &BLURHASH.height,                        // 使用 height 数据
-        *MAX_HEIGHT_NUM,                         // 使用 height 最大值
-        "https://cdn.tnxg.top/images/wallpaper", // 如果竖屏图在不同目录，请修改这里
+        &HEIGHT_ENTRIES,
+        "https://cdn.tnxg.top/images/wallpaper_height",
     )
     .await
 }
@@ -364,5 +386,62 @@ mod tests {
         assert!(validate_image_proxy_source(None, &config).is_ok());
         assert!(validate_image_proxy_source(Some(""), &config).is_ok());
         assert!(validate_image_proxy_source(Some("   "), &config).is_ok());
+    }
+
+    #[test]
+    fn random_index_stays_within_bounds() {
+        for len in [1usize, 2, 3, 7, 348] {
+            for _ in 0..500 {
+                assert!(super::random_index(len).expect("os entropy available") < len);
+            }
+        }
+        assert!(super::random_index(0).is_err());
+    }
+
+    #[test]
+    fn random_index_covers_every_position() {
+        const LEN: usize = 7;
+        const DRAWS: usize = 10_000;
+        let mut seen = [0usize; LEN];
+        for _ in 0..DRAWS {
+            seen[super::random_index(LEN).expect("os entropy available")] += 1;
+        }
+        let expected = DRAWS / LEN;
+        assert!(
+            seen.iter().all(|&c| c > expected - 400 && c < expected + 400),
+            "skewed distribution: {seen:?}"
+        );
+    }
+
+    #[test]
+    fn pick_entry_returns_some_record_verbatim() {
+        let entries = vec![
+            ("a.jpg".to_string(), "hash-a".to_string()),
+            ("b23_p0.png".to_string(), "hash-b".to_string()),
+            ("c.webp".to_string(), "hash-c".to_string()),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..2_000 {
+            let (filename, hash) = super::pick_entry(&entries).expect("entries are non-empty");
+            assert!(entries.contains(&(filename.clone(), hash.clone())));
+            seen.insert(filename.clone());
+        }
+        assert_eq!(seen.len(), entries.len());
+        assert!(super::pick_entry(&Vec::new()).is_err());
+    }
+
+    #[test]
+    fn wallpaper_index_keeps_key_and_blurhash_in_sync() {
+        let data = &*super::BLURHASH;
+        for (entries, map) in [
+            (&*super::WEIGHT_ENTRIES, &data.weight),
+            (&*super::HEIGHT_ENTRIES, &data.height),
+        ] {
+            assert_eq!(entries.len(), map.len());
+            for (filename, hash) in entries.iter() {
+                assert_eq!(map.get(filename), Some(hash));
+                assert!(!filename.is_empty());
+            }
+        }
     }
 }
